@@ -10,6 +10,38 @@ const skipped = !liveEnabled ? "Set DKPLUS_LIVE_AI=1 to enable live provider cov
 const fixturePath = (name) =>
   fileURLToPath(new URL(`../../packages/testing/fixtures/${name}`, import.meta.url));
 
+const qwenAnalysisResponseSchema = {
+  parse(value) {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new TypeError("Qwen response must be a JSON object.");
+    }
+    if (Object.getPrototypeOf(value) !== Object.prototype) {
+      throw new TypeError("Qwen response must be a plain JSON object.");
+    }
+    const keys = Object.keys(value);
+    if (keys.length !== 1 || keys[0] !== "analysis" || !Object.hasOwn(value, "analysis")) {
+      throw new TypeError("Qwen response must contain exactly the analysis key.");
+    }
+    if (typeof value.analysis !== "string" || value.analysis.trim().length === 0) {
+      throw new TypeError("Qwen analysis must be a non-empty string.");
+    }
+    return { analysis: value.analysis };
+  }
+};
+
+it("strictly validates the local Qwen response contract without a root dependency", () => {
+  assert.deepEqual(qwenAnalysisResponseSchema.parse({ analysis: "Valid." }), {
+    analysis: "Valid."
+  });
+  assert.throws(() => qwenAnalysisResponseSchema.parse({ analysis: "Valid.", extra: true }));
+  assert.throws(() => qwenAnalysisResponseSchema.parse({ analysis: "" }));
+  assert.throws(() =>
+    qwenAnalysisResponseSchema.parse(
+      Object.assign(Object.create({ analysis: "Inherited." }), { unrelated: true })
+    )
+  );
+});
+
 describe("live AI provider coverage", () => {
   it("summarizes canonical text with Azure GPT-4o", { skip: skipped }, async () => {
     const { azureProvider, runSanitizedLive } = await import("./helpers.mjs");
@@ -99,19 +131,17 @@ describe("live AI provider coverage", () => {
     { skip: skipped },
     async () => {
       const { qwenProvider, runSanitizedLive } = await import("./helpers.mjs");
-      const { z } = await import("zod");
-      const responseSchema = z.object({ analysis: z.string().min(1) }).strict();
 
       const result = await runSanitizedLive("Qwen text analysis", async () =>
         (await qwenProvider()).execute({
           feature: "live.qwen.safe-text-analysis",
           prompt:
-            "Return JSON with a concise analysis of this harmless sentence: The test checks schema validation only.",
-          responseSchema
+            'Return a single JSON object with exactly one key: "analysis" (string). Do not use Markdown or wrap the object. Provide a concise analysis of this harmless sentence: The test checks schema validation only.',
+          responseSchema: qwenAnalysisResponseSchema
         })
       );
 
-      responseSchema.parse(result);
+      qwenAnalysisResponseSchema.parse(result);
       assert.ok(result.analysis.trim().length > 0);
     }
   );

@@ -176,7 +176,7 @@ export async function summarizeTranscript(
   try {
     return await options.provider.execute({
       feature: "audio.speech.summarize",
-      prompt: `Summarize this canonical transcript as JSON.\n${canonicalTranscriptJson(transcript)}`,
+      prompt: `Return a single JSON object with exactly these keys: "summary" (non-empty string), "topics" (array of strings), "keyPoints" (array of strings), "participants" (array of strings), "decisions" (array of strings), and "questions" (array of strings). Do not use Markdown or wrap the object. Summarize this canonical transcript.\n${canonicalTranscriptJson(transcript)}`,
       responseSchema: transcriptSummarySchema
     });
   } catch (error) {

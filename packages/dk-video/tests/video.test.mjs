@@ -213,6 +213,13 @@ describe("dk-video public APIs", () => {
         "video.content.keywords",
         "video.content.summary"
       ]);
+      const summaryTask = tasks.find((task) => task.feature === "video.content.summary");
+      assert.ok(summaryTask);
+      assert.match(summaryTask.prompt, /single JSON object/u);
+      assert.match(summaryTask.prompt, /"summary" \(non-empty string\)/u);
+      assert.match(summaryTask.prompt, /"topics" \(array of non-empty strings\)/u);
+      assert.match(summaryTask.prompt, /"keyPoints" \(array of non-empty strings\)/u);
+      assert.match(summaryTask.prompt, /Do not use Markdown or wrap the object/u);
       for (const task of tasks) {
         assert.match(task.prompt, /\[00:00\.000-00:01\.000\] Hello video\./u);
         assert.equal(task.images.length, 1);

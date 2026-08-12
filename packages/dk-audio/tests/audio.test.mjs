@@ -100,9 +100,9 @@ describe("dk-audio public APIs", () => {
   });
 
   it("summarizes a validated transcript through the speech summary feature", async () => {
-    const features = [];
+    const tasks = [];
     const provider = createMockProvider((task) => {
-      features.push(task.feature);
+      tasks.push(task);
       return {
         summary: "A greeting.",
         topics: ["greeting"],
@@ -115,7 +115,18 @@ describe("dk-audio public APIs", () => {
 
     const result = await summarizeTranscript(transcript, { provider });
 
-    assert.deepEqual(features, ["audio.speech.summarize"]);
+    assert.deepEqual(
+      tasks.map((task) => task.feature),
+      ["audio.speech.summarize"]
+    );
+    assert.match(tasks[0].prompt, /single JSON object/u);
+    assert.match(tasks[0].prompt, /"summary" \(non-empty string\)/u);
+    assert.match(tasks[0].prompt, /"topics" \(array of strings\)/u);
+    assert.match(tasks[0].prompt, /"keyPoints" \(array of strings\)/u);
+    assert.match(tasks[0].prompt, /"participants" \(array of strings\)/u);
+    assert.match(tasks[0].prompt, /"decisions" \(array of strings\)/u);
+    assert.match(tasks[0].prompt, /"questions" \(array of strings\)/u);
+    assert.match(tasks[0].prompt, /Do not use Markdown or wrap the object/u);
     assert.equal(result.summary, "A greeting.");
     await assert.rejects(
       () => summarizeTranscript({ ...transcript, language: "" }, { provider }),

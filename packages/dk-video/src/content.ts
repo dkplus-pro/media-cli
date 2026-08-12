@@ -215,7 +215,7 @@ export async function summarizeVideoContent(
     videoPath,
     options,
     "video.content.summary",
-    "Summarize this video only from the transcript and referenced filmstrip image as JSON.",
+    'Return a single JSON object with exactly these keys: "summary" (non-empty string), "topics" (array of non-empty strings), and "keyPoints" (array of non-empty strings). Do not use Markdown or wrap the object. Summarize this video only from the transcript and referenced filmstrip image.',
     videoContentSummarySchema.pick({ summary: true, topics: true, keyPoints: true })
   );
   return videoContentSummarySchema.parse({

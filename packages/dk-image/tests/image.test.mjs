@@ -94,6 +94,17 @@ describe("dk-image public APIs", () => {
     assert.equal(score.score, 8.5);
   });
 
+  it("requires the exact JSON object contract for an image description", async () => {
+    const tasks = [];
+
+    await describeImage(imagePath, { provider: imageProvider((task) => tasks.push(task)) });
+
+    assert.equal(tasks.length, 1);
+    assert.match(tasks[0].prompt, /single JSON object/u);
+    assert.match(tasks[0].prompt, /exactly one key: "description" \(non-empty string\)/u);
+    assert.match(tasks[0].prompt, /Do not use Markdown or wrap the object/u);
+  });
+
   it("rejects provider scores outside the inclusive 0 through 10 range", async () => {
     await assert.rejects(
       () =>

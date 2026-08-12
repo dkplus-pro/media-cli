@@ -189,7 +189,7 @@ async function describeLoadedImage(
     asset,
     provider,
     "image.content.describe",
-    "Describe this local image as JSON.",
+    'Return a single JSON object with exactly one key: "description" (non-empty string). Do not use Markdown or wrap the object. Describe this local image.',
     imageDescriptionResultSchema.pick({ description: true })
   );
   return imageDescriptionResultSchema.parse({
