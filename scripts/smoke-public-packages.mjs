@@ -42,6 +42,20 @@ function packageIdentity(item) {
   return `${item.manifest.name}@${item.manifest.version}`;
 }
 
+function packedManifestDependencies(manifest) {
+  return new Set(dependencyEntries(manifest).map((dependency) => dependency.name));
+}
+
+function assertPackedManifestDeclaresRuntimeDependencies(sourceManifest, packedManifest) {
+  const packedDependencies = packedManifestDependencies(packedManifest);
+  for (const dependency of dependencyEntries(sourceManifest)) {
+    assert.ok(
+      packedDependencies.has(dependency.name),
+      `${packedManifest.name} archive omits runtime dependency ${dependency.name}`
+    );
+  }
+}
+
 async function workspacePackages() {
   const entries = await readdir(packagesDirectory, { withFileTypes: true });
   const manifests = await Promise.all(
@@ -68,6 +82,10 @@ function publicPackages(packages) {
   return packages.filter((item) => item.manifest.private !== true);
 }
 
+async function readPackedManifest(archivePath) {
+  return JSON.parse(await run("tar", ["-xOf", archivePath, "package/package.json"], rootDirectory));
+}
+
 async function packAndInspect(item, packDirectory, verifyDeclaredFiles = false) {
   const before = new Set(await readdir(packDirectory));
   await run("pnpm", ["pack", "--pack-destination", packDirectory], item.directory);
@@ -91,7 +109,14 @@ async function packAndInspect(item, packDirectory, verifyDeclaredFiles = false) 
       );
     }
   }
-  return archivePath;
+  const manifest = await readPackedManifest(archivePath);
+  assert.equal(
+    manifest.name,
+    item.manifest.name,
+    `packed manifest mismatch for ${item.manifest.name}`
+  );
+  assertPackedManifestDeclaresRuntimeDependencies(item.manifest, manifest);
+  return { archivePath, manifest };
 }
 
 async function packPublicPackages(packages, packDirectory) {
@@ -152,25 +177,26 @@ async function collectRuntimePackages(workspace, archives, packDirectory) {
       existing.optional ||= optional;
       return existing;
     }
-    const archivePath = archives.get(identity) ?? (await packAndInspect(item, packDirectory));
-    archives.set(identity, archivePath);
+    const packedPackage = archives.get(identity) ?? (await packAndInspect(item, packDirectory));
+    archives.set(identity, packedPackage);
     const runtimePackage = {
       ...item,
-      archivePath,
-      specification: `file:${await realpath(archivePath)}`,
+      archivePath: packedPackage.archivePath,
+      manifest: packedPackage.manifest,
+      specification: `file:${await realpath(packedPackage.archivePath)}`,
       optional,
       dependencies: new Map(),
       optionalDependencies: new Map()
     };
     runtimePackages.set(identity, runtimePackage);
-    for (const dependency of dependencyEntries(item.manifest)) {
+    for (const dependency of dependencyEntries(runtimePackage.manifest)) {
       const dependencyPackage =
         workspaceByName.get(dependency.name) ??
         (await findInstalledPackage(item.directory, dependency.name));
       if (!dependencyPackage) {
         assert.ok(
           dependency.optional,
-          `missing installed runtime dependency ${dependency.name} for ${item.manifest.name}`
+          `missing installed runtime dependency ${dependency.name} for ${runtimePackage.manifest.name}`
         );
         continue;
       }
@@ -183,13 +209,12 @@ async function collectRuntimePackages(workspace, archives, packDirectory) {
     return runtimePackage;
   }
 
-  const roots = await Promise.all(
-    cliPackageNames.map(async (name) => {
-      const item = workspaceByName.get(name);
-      assert.ok(item, `missing workspace package ${name}`);
-      return visit(item);
-    })
-  );
+  const roots = [];
+  for (const name of cliPackageNames) {
+    const item = workspaceByName.get(name);
+    assert.ok(item, `missing workspace package ${name}`);
+    roots.push(await visit(item));
+  }
   return { roots, runtimePackages };
 }
 
@@ -208,16 +233,18 @@ async function rewritePackedManifests(runtimePackages, rewriteDirectory) {
       `packed manifest mismatch for ${item.manifest.name}`
     );
     for (const [name, dependency] of item.dependencies) {
-      manifest.dependencies ??= {};
+      assert.ok(
+        name in (manifest.dependencies ?? {}),
+        `${manifest.name} archive does not declare dependency ${name}`
+      );
       manifest.dependencies[name] = dependency.specification;
     }
-    for (const [name] of Object.entries(manifest.optionalDependencies ?? {})) {
-      const target = item.optionalDependencies.get(name);
-      if (target) {
-        manifest.optionalDependencies[name] = target.specification;
-      } else {
-        delete manifest.optionalDependencies[name];
-      }
+    for (const [name, dependency] of item.optionalDependencies) {
+      assert.ok(
+        name in (manifest.optionalDependencies ?? {}),
+        `${manifest.name} archive does not declare optional dependency ${name}`
+      );
+      manifest.optionalDependencies[name] = dependency.specification;
     }
     await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
     await run("tar", ["-czf", item.archivePath, "-C", unpackDirectory, "package"], rootDirectory);
