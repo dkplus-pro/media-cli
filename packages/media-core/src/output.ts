@@ -5,10 +5,12 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { CliError } from "@dkplus/contracts";
 
 export type PathInspector = (path: string) => Promise<Stats>;
+export type OutputDirectoryCleaner = (path: string) => Promise<void>;
 
 export interface MediaOutputOptions {
   force?: boolean;
   pathInspector?: PathInspector;
+  cleanupDirectory?: OutputDirectoryCleaner;
 }
 
 export interface PreparedMediaOutput {
@@ -49,6 +51,14 @@ function outputPublishError(): CliError {
   return new CliError({
     code: "INVALID_ARGUMENT",
     message: "Unable to publish media output."
+  });
+}
+
+function outputCleanupError(): CliError {
+  return new CliError({
+    code: "MEDIA_PROCESS_FAILED",
+    message: "Media processing failed.",
+    details: { operation: "output-cleanup" }
   });
 }
 
@@ -117,6 +127,11 @@ export async function prepareMediaOutput(
     throw outputPathInspectionError();
   }
   const temporaryPath = join(temporaryDirectory, `output${extname(targetPath)}`);
+  const cleanupDirectory =
+    options.cleanupDirectory ??
+    (async (path: string): Promise<void> => {
+      await rm(path, { recursive: true, force: true });
+    });
 
   return {
     temporaryPath,
@@ -143,7 +158,11 @@ export async function prepareMediaOutput(
       }
     },
     async cleanup(): Promise<void> {
-      await rm(temporaryDirectory, { recursive: true, force: true });
+      try {
+        await cleanupDirectory(temporaryDirectory);
+      } catch {
+        throw outputCleanupError();
+      }
     }
   };
 }

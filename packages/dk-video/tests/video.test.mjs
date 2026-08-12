@@ -122,6 +122,30 @@ describe("dk-video public APIs", () => {
     });
   });
 
+  it("returns an output preflight error without an unhandled fingerprint rejection", async () => {
+    await withTemporaryDirectory(async (directory) => {
+      const unavailableInputPath = join(directory, "unavailable-video.mp4");
+      const outputPath = join(directory, "audio.wav");
+      const unhandledRejections = [];
+      const onUnhandledRejection = (reason) => {
+        unhandledRejections.push(reason);
+      };
+      process.on("unhandledRejection", onUnhandledRejection);
+
+      try {
+        await writeFile(outputPath, "preserve existing output");
+        await assert.rejects(
+          () => extractVideoAudio(unavailableInputPath, outputPath),
+          (error) => error instanceof CliError && error.code === "OUTPUT_EXISTS"
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.deepEqual(unhandledRejections, []);
+      } finally {
+        process.off("unhandledRejection", onUnhandledRejection);
+      }
+    });
+  });
+
   it("rejects invalid filmstrip output extensions before force can overwrite an existing file", async () => {
     await withTemporaryDirectory(async (directory) => {
       const outputPath = join(directory, "filmstrip.txt");

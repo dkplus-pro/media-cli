@@ -145,6 +145,8 @@ export async function createFilmstrip(
     `[a][b][c][d]xstack=inputs=4:layout=0_0|${tileWidth}_0|0_${tileHeight}|${tileWidth}_${tileHeight}`
   ].join(";");
 
+  let failure: unknown;
+  let hasFailure = false;
   try {
     await runMediaTool(
       "ffmpeg",
@@ -179,8 +181,22 @@ export async function createFilmstrip(
       options
     );
     await output.publish();
-  } finally {
+  } catch (error) {
+    failure = error;
+    hasFailure = true;
+  }
+
+  try {
     await output.cleanup();
+  } catch (cleanupError) {
+    if (!hasFailure) {
+      failure = cleanupError;
+      hasFailure = true;
+    }
+  }
+
+  if (hasFailure) {
+    throw failure;
   }
 
   return {

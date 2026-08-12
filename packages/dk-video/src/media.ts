@@ -168,12 +168,11 @@ export async function extractVideoAudio(
   outputPath: string,
   options: ExtractVideoAudioOptions = {}
 ): Promise<VideoAudio> {
-  const sourceFingerprintPromise = fingerprintFile(videoPath);
-  await extractAudio(videoPath, outputPath, { force: options.force });
-  const [sourceFingerprint, metadata] = await Promise.all([
-    sourceFingerprintPromise,
-    probeAudio(outputPath)
-  ]);
+  const sourceFingerprint = await extractAudio(videoPath, outputPath, {
+    force: options.force,
+    onOutputPrepared: () => fingerprintFile(videoPath)
+  });
+  const metadata = await probeAudio(outputPath);
   return videoAudioArtifact(sourceFingerprint, outputPath, metadata);
 }
 

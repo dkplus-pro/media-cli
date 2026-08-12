@@ -9,7 +9,9 @@ export interface AudioMetadata {
   bitRate?: number;
 }
 
-export interface ExtractAudioOptions extends MediaProcessOptions, MediaOutputOptions {}
+export interface ExtractAudioOptions extends MediaProcessOptions, MediaOutputOptions {
+  onOutputPrepared?: () => Promise<unknown>;
+}
 
 interface ProbePayload {
   format?: { duration?: string; bit_rate?: string };
@@ -82,13 +84,28 @@ export async function probeAudio(
   return parseAudioMetadata(result.stdout);
 }
 
-export async function extractAudio(
+export function extractAudio<T>(
+  inputPath: string,
+  outputPath: string,
+  options: ExtractAudioOptions & { onOutputPrepared: () => Promise<T> }
+): Promise<T>;
+export function extractAudio(
+  inputPath: string,
+  outputPath: string,
+  options?: ExtractAudioOptions
+): Promise<void>;
+export async function extractAudio<T>(
   inputPath: string,
   outputPath: string,
   options: ExtractAudioOptions = {}
-): Promise<void> {
+): Promise<T | void> {
   const output = await prepareMediaOutput(inputPath, outputPath, "Audio output", options);
+  let failure: unknown;
+  let hasFailure = false;
+  let preparedValue: T | void = undefined;
+  const onOutputPrepared = options.onOutputPrepared as (() => Promise<T>) | undefined;
   try {
+    preparedValue = onOutputPrepared === undefined ? undefined : await onOutputPrepared();
     await runMediaTool(
       "ffmpeg",
       [
@@ -107,7 +124,22 @@ export async function extractAudio(
       options
     );
     await output.publish();
-  } finally {
-    await output.cleanup();
+  } catch (error) {
+    failure = error;
+    hasFailure = true;
   }
+
+  try {
+    await output.cleanup();
+  } catch (cleanupError) {
+    if (!hasFailure) {
+      failure = cleanupError;
+      hasFailure = true;
+    }
+  }
+
+  if (hasFailure) {
+    throw failure;
+  }
+  return preparedValue;
 }

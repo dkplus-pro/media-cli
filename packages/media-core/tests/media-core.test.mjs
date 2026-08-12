@@ -179,6 +179,26 @@ describe("media adapters", () => {
     assert.equal(processWasStarted, false);
   });
 
+  it("preserves media processing failures when temporary output cleanup fails", async () => {
+    await withTemporaryDirectory(async (directory) => {
+      const outputPath = join(directory, "audio.wav");
+      await assert.rejects(
+        () =>
+          extractAudio(videoFixture, outputPath, {
+            processRunner: async () => ({ exitCode: 1, stdout: "", stderr: "" }),
+            cleanupDirectory: async () => {
+              throw new Error("raw cleanup failure");
+            }
+          }),
+        (error) =>
+          error instanceof CliError &&
+          error.code === "MEDIA_PROCESS_FAILED" &&
+          error.message === "Media processing failed." &&
+          !error.message.includes("raw cleanup failure")
+      );
+    });
+  });
+
   it("refuses separate pre-existing media-core outputs unless force is explicit", async () => {
     await withTemporaryDirectory(async (directory) => {
       const audioOutputPath = join(directory, "audio.wav");
