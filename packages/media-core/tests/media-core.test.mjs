@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
+import { execFile as execFileCallback } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { describe, it } from "node:test";
+import { promisify } from "node:util";
 
 import { CliError } from "@dkplus/contracts";
 import { fixturePath } from "@dkplus/testing";
@@ -20,8 +22,10 @@ import {
 } from "../dist/index.js";
 
 const videoFixture = fixturePath("short-video.mp4");
+const filmstripFixture = fixturePath("filmstrip-source.mp4");
 const audioFixture = fixturePath("short-audio.wav");
 const imageFixture = fixturePath("sample.png");
+const execFile = promisify(execFileCallback);
 
 async function withTemporaryDirectory(callback) {
   const directory = await mkdtemp(join(tmpdir(), "dkplus-media-core-"));
@@ -30,6 +34,29 @@ async function withTemporaryDirectory(callback) {
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+}
+
+async function frameAtTimestamp(path, timestamp, width, height, directory) {
+  const outputPath = join(directory, `frame-${timestamp}.png`);
+  await execFile("ffmpeg", [
+    "-y",
+    "-v",
+    "error",
+    "-ss",
+    String(timestamp),
+    "-i",
+    path,
+    "-vf",
+    `scale=${width}:${height},setsar=1`,
+    "-frames:v",
+    "1",
+    outputPath
+  ]);
+  return (await loadImage(outputPath)).raw().toBuffer();
+}
+
+async function filmstripQuadrant(path, left, top, width, height) {
+  return (await loadImage(path)).extract({ left, top, width, height }).raw().toBuffer();
 }
 
 describe("media adapters", () => {
@@ -58,22 +85,36 @@ describe("media adapters", () => {
     });
   });
 
-  it("creates a two-by-two filmstrip from four requested timestamps at the requested dimensions", async () => {
+  it("creates a two-by-two filmstrip whose quadrants match all four requested timestamps", async () => {
     await withTemporaryDirectory(async (directory) => {
       const outputPath = join(directory, "filmstrip.png");
-      const result = await createFilmstrip(videoFixture, outputPath, {
-        timestamps: [0.25, 1.25, 2.25, 2.75],
+      const timestamps = [0.25, 1.25, 2.25, 3.25];
+      const result = await createFilmstrip(filmstripFixture, outputPath, {
+        timestamps,
         width: 320,
         height: 180
       });
 
-      assert.deepEqual(result.timestamps, [0.25, 1.25, 2.25, 2.75]);
+      assert.deepEqual(result.timestamps, timestamps);
       assert.deepEqual(await readImageMetadata(outputPath), {
         width: 320,
         height: 180,
         format: "png",
         hasAlpha: false
       });
+
+      const expectedFrames = await Promise.all(
+        timestamps.map((timestamp) => frameAtTimestamp(filmstripFixture, timestamp, 160, 90, directory))
+      );
+      const quadrants = await Promise.all([
+        filmstripQuadrant(outputPath, 0, 0, 160, 90),
+        filmstripQuadrant(outputPath, 160, 0, 160, 90),
+        filmstripQuadrant(outputPath, 0, 90, 160, 90),
+        filmstripQuadrant(outputPath, 160, 90, 160, 90)
+      ]);
+
+      assert.equal(new Set(expectedFrames.map((frame) => createHash("sha256").update(frame).digest("hex"))).size, 4);
+      assert.deepEqual(quadrants, expectedFrames);
     });
   });
 
@@ -105,6 +146,10 @@ describe("media adapters", () => {
         () => watermarkImage(imageFixture, outputPath, { text: "dkplus" }),
         (error) => error instanceof CliError && error.code === "OUTPUT_EXISTS"
       );
+      await assert.rejects(
+        () => watermarkImage(imageFixture, join(dirname(imageFixture), ".", "sample.png"), { text: "dkplus", force: true }),
+        (error) => error instanceof CliError && error.code === "INVALID_ARGUMENT"
+      );
     });
   });
 
@@ -123,11 +168,20 @@ describe("media adapters", () => {
     assert.match(first.value, /^[a-f0-9]{64}$/u);
   });
 
-  it("maps unavailable tools and corrupt media to sanitized CLI errors", async () => {
+  it("maps unavailable and non-executable tools and corrupt media to sanitized CLI errors", async () => {
     await assert.rejects(
       () => probeVideo(videoFixture, { ffprobePath: "dkplus-no-such-ffprobe" }),
       (error) => error instanceof CliError && error.code === "MEDIA_TOOL_UNAVAILABLE"
     );
+    await withTemporaryDirectory(async (directory) => {
+      const unavailablePath = join(directory, "ffprobe");
+      await writeFile(unavailablePath, "not executable");
+      await chmod(unavailablePath, 0o644);
+      await assert.rejects(
+        () => probeVideo(videoFixture, { ffprobePath: unavailablePath }),
+        (error) => error instanceof CliError && error.code === "MEDIA_TOOL_UNAVAILABLE"
+      );
+    });
     await assert.rejects(
       () => probeVideo(fixturePath("not-media.bin")),
       (error) =>

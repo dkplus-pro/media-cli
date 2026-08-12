@@ -60,12 +60,12 @@ function processFailedError(tool: "ffmpeg" | "ffprobe", exitCode?: number): CliE
   });
 }
 
-function isMissingExecutable(error: unknown): boolean {
+function isUnavailableExecutable(error: unknown): boolean {
   return (
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
-    error.code === "ENOENT"
+    (error.code === "ENOENT" || error.code === "EACCES")
   );
 }
 
@@ -81,7 +81,7 @@ export async function runMediaTool(
   try {
     result = await runner(command, argumentsList);
   } catch (error) {
-    if (isMissingExecutable(error)) {
+    if (isUnavailableExecutable(error)) {
       throw unavailableToolError(tool);
     }
     throw processFailedError(tool);

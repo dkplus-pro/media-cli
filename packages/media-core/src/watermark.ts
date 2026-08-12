@@ -1,5 +1,6 @@
-import { access } from "node:fs/promises";
+import { access, realpath } from "node:fs/promises";
 import { constants } from "node:fs";
+import { resolve } from "node:path";
 
 import sharp from "sharp";
 
@@ -41,6 +42,26 @@ function outputExistsError(): CliError {
   });
 }
 
+function sameInputOutputError(): CliError {
+  return new CliError({
+    code: "INVALID_ARGUMENT",
+    message: "Watermark output must differ from the input path."
+  });
+}
+
+async function resolvesToSameFile(inputPath: string, outputPath: string): Promise<boolean> {
+  if (resolve(inputPath) === resolve(outputPath)) {
+    return true;
+  }
+
+  try {
+    const [resolvedInputPath, resolvedOutputPath] = await Promise.all([realpath(inputPath), realpath(outputPath)]);
+    return resolvedInputPath === resolvedOutputPath;
+  } catch {
+    return false;
+  }
+}
+
 function imageFailed(): CliError {
   return new CliError({
     code: "MEDIA_PROCESS_FAILED",
@@ -54,6 +75,9 @@ export async function watermarkImage(
   outputPath: string,
   options: WatermarkOptions
 ): Promise<ImageMetadata> {
+  if (await resolvesToSameFile(inputPath, outputPath)) {
+    throw sameInputOutputError();
+  }
   if (!options.force && (await outputExists(outputPath))) {
     throw outputExistsError();
   }
