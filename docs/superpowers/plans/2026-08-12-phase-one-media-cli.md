@@ -46,9 +46,9 @@ Files: create packages/ai-core source for task types, config, feature resolver, 
 
 Produces: AIProvider.execute(task), FeatureResolver.resolve(feature), mock, Azure GPT-4o, and Qwen-compatible providers.
 
-- [ ] Test that audio.speech.summarize resolves to an Azure profile and Azure sends api-key auth to openai/v1/chat/completions.
+- [ ] Test that audio.speech.summarize resolves to an Azure profile and Azure sends api-key auth to the configured deployment chat-completions endpoint.
 - [ ] Run ai-core tests; expect missing modules.
-- [ ] Implement typed tasks with feature, prompt, optional images, and Zod parsing. Azure appends openai/v1 once; Qwen uses Bearer auth.
+- [ ] Implement typed tasks with feature, prompt, optional images, and Zod parsing. Azure treats the configured model as its deployment and calls openai/deployments/{deployment}/chat/completions with a configurable API version; Qwen uses Bearer auth at baseUrl/chat/completions.
 - [ ] Verify all provider tests use stubbed fetch and read no real environment values.
 - [ ] Commit: feat: add ai feature routing.
 
