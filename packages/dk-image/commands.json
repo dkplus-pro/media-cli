@@ -1,0 +1,48 @@
+{
+  "package": "@dkplus/dk-image",
+  "binary": "dk-image",
+  "commands": [
+    {
+      "command": "content metadata",
+      "description": "Read deterministic local image metadata.",
+      "input": { "type": "image-file" },
+      "outputs": ["image-metadata-json"]
+    },
+    {
+      "command": "content describe",
+      "description": "Describe local image content through a configured AI provider.",
+      "input": { "type": "image-file" },
+      "outputs": ["image-description-json"]
+    },
+    {
+      "command": "content keywords",
+      "description": "Extract local image keywords through a configured AI provider.",
+      "input": { "type": "image-file" },
+      "outputs": ["image-keywords-json"]
+    },
+    {
+      "command": "content ocr",
+      "description": "Extract visible local image text through a configured AI provider.",
+      "input": { "type": "image-file" },
+      "outputs": ["image-ocr-json"]
+    },
+    {
+      "command": "content score",
+      "description": "Score a local image from zero through ten through a configured AI provider.",
+      "input": { "type": "image-file" },
+      "outputs": ["image-score-json"]
+    },
+    {
+      "command": "analyze",
+      "description": "Combine metadata, description, keywords, OCR, and score.",
+      "input": { "type": "image-file" },
+      "outputs": ["image-analysis-json"]
+    },
+    {
+      "command": "watermark",
+      "description": "Write a watermark to a distinct output image.",
+      "input": { "type": "image-file", "output": "image-file", "text": "string" },
+      "outputs": ["watermarked-image-json"]
+    }
+  ]
+}

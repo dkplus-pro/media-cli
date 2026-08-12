@@ -1,117 +1,66 @@
-# Monorepo Template
+# dkplus Media CLI
 
-A pnpm + Turborepo monorepo template with shared configuration packages, a Modern.js React demo app, CI scripts, tests, and GitHub Pages deployment.
+`dkplus Media CLI` is a pnpm/Turborepo workspace for three publishable,
+machine-oriented media CLIs:
 
-## GitHub Pages
+- `@dkplus/dk-audio` — six audio commands
+- `@dkplus/dk-video` — eight video commands
+- `@dkplus/dk-image` — seven image commands
 
-- Demo URL template: [https://OWNER.github.io/REPOSITORY/](https://OWNER.github.io/REPOSITORY/)
-- After creating your GitHub repository, replace `OWNER` and `REPOSITORY` with your real GitHub org/user and repo name.
-- Enable **Settings → Pages → Build and deployment → Source: GitHub Actions**. The workflow in `.github/workflows/pages.yml` builds `apps/demo` and deploys `apps/demo/dist`.
+Phase one implements 21 non-generative commands. It deliberately does **not**
+expose image or video generation.
 
-## What's included
+## Documentation
 
-```text
-apps/
-  demo/                  Modern.js React hello-world app
-packages/
-  tsconfig/              Shared TypeScript presets
-  eslint-config/         Shared ESLint flat config
-  prettier-config/       Shared Prettier config
-  commitlint-config/     Shared Commitlint config
-scripts/
-  ci.sh                  Full CI pipeline helper
-  verify.sh              Fast local verification helper
-  deploy-github-pages.sh Build and validate Pages artifact
-.github/workflows/
-  ci.yml                 Lint, typecheck, test, build
-  pages.yml              GitHub Pages deployment
-tests/
-  jest/                  Repository and script unit tests
-  playwright/            Demo app browser smoke test
-```
+- [English phase-one CLI guide](docs/en/phase-one-cli.md)
+- [简体中文第一阶段 CLI 指南](docs/zh-CN/phase-one-cli.md)
+- [Architecture and future-phase design](docs/DESIGN.md)
 
-## Requirements
+## Requirements and install
 
-- Node.js `>=20.19.5` (Node 22 LTS recommended; `.nvmrc` uses `lts/jod`)
-- pnpm via Corepack (`packageManager` pins pnpm)
+- Node.js `>=20.19.5` (Node 22 LTS recommended)
+- pnpm `>=10.1.0` through Corepack
+- `ffmpeg` and `ffprobe` on `PATH` for audio/video probing, extraction, and
+  filmstrips; programmatic media-core callers can override their executable
+  paths.
 
 ```bash
 corepack enable
-node --version
-pnpm --version
+pnpm install --frozen-lockfile
+pnpm build
+
+# Run a workspace binary during development.
+pnpm --filter @dkplus/dk-audio exec dk-audio --help
 ```
 
-## Install
+All CLIs emit a single JSON success-or-error envelope to stdout. Use `--help`
+for usage and `--schema --json` to inspect an individual command contract.
+
+## Development and verification
 
 ```bash
-pnpm install
+pnpm format       # Prettier check only
+pnpm lint
+pnpm typecheck
+pnpm test         # Jest, workspace tests, and Playwright; never live providers
+pnpm build
+pnpm test:live    # Skips unless DKPLUS_LIVE_AI=1 is explicitly set
+pnpm test:smoke   # Packs every public package, installs a disposable consumer, runs CLI help
 ```
 
-## Start the demo app
+CI installs with a frozen lockfile, keeps Playwright browser preparation, and
+runs formatting, linting, typechecks, non-live tests, builds, and the package
+consumer smoke test. It never invokes `test:live`.
 
-```bash
-pnpm dev
+## Repository layout
+
+```text
+packages/contracts/   Shared result, error, artifact, and transcript contracts
+packages/cli-core/    Shared flags, schemas, command runner, JSON/JSONL output
+packages/ai-core/     Feature routing plus Azure/OpenAI-compatible providers
+packages/media-core/  FFmpeg/ffprobe and image adapters
+packages/testing/     Deterministic fixtures and test helpers
+packages/dk-audio/    Publishable dk-audio package and binary
+packages/dk-image/    Publishable dk-image package and binary
+packages/dk-video/    Publishable dk-video package and binary
 ```
-
-The Modern.js demo runs at <http://localhost:8080/> by default.
-
-To run only the demo workspace:
-
-```bash
-pnpm --filter @dk-media/demo run dev
-```
-
-## Development commands
-
-```bash
-pnpm lint          # Turbo workspace lint + root ESLint
-pnpm typecheck     # TypeScript checks across workspaces
-pnpm test          # Jest + workspace tests + Playwright smoke test
-pnpm build         # Build all buildable workspaces
-pnpm format        # Check Prettier formatting
-pnpm format:write  # Fix Prettier formatting
-pnpm verify        # Fast local verification helper
-pnpm ci            # CI helper: install + lint + typecheck + test + build
-```
-
-## Git hooks and commits
-
-Husky is installed through the root `prepare` script.
-
-- `pre-commit`: runs `lint-staged`
-- `commit-msg`: runs Commitlint using the shared conventional commit config
-
-Use conventional commit messages such as:
-
-```bash
-git commit -m "feat: add shared ui package"
-```
-
-## Tests
-
-- Jest unit tests live in `tests/jest`.
-- Playwright E2E tests live in `tests/playwright` and start the Modern.js demo automatically.
-- The app also has a lightweight Node test under `apps/demo/tests`.
-
-For a first Playwright run locally, install the Chromium browser:
-
-```bash
-pnpm exec playwright install chromium
-pnpm run test:e2e
-```
-
-## GitHub Pages deployment
-
-Local artifact build:
-
-```bash
-GITHUB_PAGES_BASE_PATH=/REPOSITORY pnpm run build:pages
-```
-
-This builds `apps/demo/dist` and verifies that `index.html` is at the artifact root. In GitHub Actions, `pages.yml` sets `GITHUB_PAGES_BASE_PATH` from the repository name and uploads `apps/demo/dist` with the official Pages artifact action.
-
-## Adding more workspaces
-
-- Add applications under `apps/*`.
-- Add shared packages under `packages/*`.
-- Add package-level scripts named `build`, `lint`, `typecheck`, and `test` so Turborepo can schedule them.
