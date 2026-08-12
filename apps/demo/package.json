@@ -1,0 +1,32 @@
+{
+  "name": "@dk-media/demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "modern build",
+    "build:github-pages": "modern build",
+    "deploy:github-pages": "pnpm --workspace-root run build:pages",
+    "dev": "modern dev",
+    "lint": "eslint . --max-warnings=0",
+    "serve": "modern serve",
+    "test": "node --test tests/*.test.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modern-js/runtime": "^3.5.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.8",
+    "@modern-js/app-tools": "^3.5.0",
+    "@types/node": "^24.10.2",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

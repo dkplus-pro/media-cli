@@ -1,0 +1,9 @@
+.omx
+.turbo
+coverage
+dist
+build
+node_modules
+pnpm-lock.yaml
+playwright-report
+test-results
