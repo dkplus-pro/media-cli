@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { lstat, mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { lstat, mkdtemp, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 
 const rootDirectory = process.cwd();
 const packagesDirectory = join(rootDirectory, "packages");
@@ -77,30 +78,128 @@ async function packAndInspect(packages, packDirectory) {
 }
 
 async function installPackedPackages(packages, archives, consumerDirectory) {
-  const packedDependencies = Object.fromEntries(
-    packages.map((item) => [item.manifest.name, `file:${archives.get(item.manifest.name)}`])
+  const archiveSpecifications = new Map(
+    await Promise.all(
+      packages.map(async (item) => {
+        const archivePath = archives.get(item.manifest.name);
+        assert.ok(archivePath, `missing archive for ${item.manifest.name}`);
+        return [item.manifest.name, `file:${await realpath(archivePath)}`];
+      })
+    )
   );
-  const dependencies = {
-    ...packedDependencies,
-    zod: `link:${resolve(rootDirectory, "packages/ai-core/node_modules/zod")}`,
-    sharp: `link:${resolve(rootDirectory, "packages/media-core/node_modules/sharp")}`
-  };
+  const packedDependencies = Object.fromEntries(archiveSpecifications);
+  const externalDependencies = { sharp: "0.34.5", zod: "3.25.76" };
   await writeFile(
     join(consumerDirectory, "package.json"),
     `${JSON.stringify({
       name: "dkplus-smoke-consumer",
       private: true,
       version: "0.0.0",
-      dependencies
+      dependencies: { ...packedDependencies, ...externalDependencies }
     })}\n`
   );
-  await writeFile(
-    join(consumerDirectory, "pnpm-workspace.yaml"),
-    `overrides:\n${Object.entries(dependencies)
-      .map(([name, specification]) => `  ${JSON.stringify(name)}: ${JSON.stringify(specification)}`)
-      .join("\n")}\n`
+  await writeConsumerLockfile(
+    packages,
+    archives,
+    archiveSpecifications,
+    consumerDirectory,
+    { ...packedDependencies, ...externalDependencies },
+    externalDependencies
   );
-  await run("pnpm", ["install", "--offline", "--ignore-scripts"], consumerDirectory);
+  await run("pnpm", ["install", "--offline", "--ignore-scripts", "--frozen-lockfile"], consumerDirectory);
+}
+
+async function writeConsumerLockfile(
+  packages,
+  archives,
+  archiveSpecifications,
+  consumerDirectory,
+  dependencies,
+  externalDependencies
+) {
+  const rootLockfile = await readFile(join(rootDirectory, "pnpm-lock.yaml"), "utf8");
+  const packagesStart = rootLockfile.indexOf("\npackages:");
+  const snapshotsStart = rootLockfile.indexOf("\nsnapshots:");
+  const packageResolutionRecords = rootLockfile.slice(packagesStart + 11, snapshotsStart);
+  const snapshotRecords = rootLockfile.slice(snapshotsStart + 12);
+  const dependencyEntries = Object.entries(dependencies)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(
+      ([name, specification]) =>
+        `      ${JSON.stringify(name)}:\n        specifier: ${JSON.stringify(specification)}\n        version: ${JSON.stringify(specification)}`
+    )
+    .join("\n");
+  const archiveEntries = await Promise.all(
+    packages.map(async (item) => {
+      const archivePath = archives.get(item.manifest.name);
+      assert.ok(archivePath, `missing archive for ${item.manifest.name}`);
+      const specification = archiveSpecifications.get(item.manifest.name);
+      assert.ok(specification, `missing archive specification for ${item.manifest.name}`);
+      const key = `${item.manifest.name}@${specification}`;
+      const integrity = `sha512-${createHash("sha512")
+        .update(await readFile(archivePath))
+        .digest("base64")}`;
+      const snapshotDependencies = Object.entries(item.manifest.dependencies ?? {})
+        .map(([name]) => {
+          const version = archiveSpecifications.get(name) ?? externalDependencies[name];
+          assert.ok(version, `missing smoke dependency resolution for ${name}`);
+          return `      ${JSON.stringify(name)}: ${JSON.stringify(version)}`;
+        })
+        .sort()
+        .join("\n");
+      return {
+        packageRecord: `  ${JSON.stringify(key)}:\n    resolution: {integrity: ${JSON.stringify(integrity)}}\n    version: ${item.manifest.version}`,
+        snapshotRecord:
+          snapshotDependencies.length === 0
+            ? `  ${JSON.stringify(key)}: {}`
+            : `  ${JSON.stringify(key)}:\n    dependencies:\n${snapshotDependencies}`
+      };
+    })
+  );
+  const lockfile = [
+    "lockfileVersion: '9.0'",
+    "",
+    "settings:",
+    "  autoInstallPeers: true",
+    "  excludeLinksFromLockfile: false",
+    "",
+    "importers:",
+    "",
+    "  .:",
+    "    dependencies:",
+    dependencyEntries,
+    "",
+    "packages:",
+    ...archiveEntries.map((entry) => entry.packageRecord),
+    packageResolutionRecords,
+    "",
+    "snapshots:",
+    ...archiveEntries.map((entry) => entry.snapshotRecord),
+    snapshotRecords
+  ].join("\n");
+  await writeFile(join(consumerDirectory, "pnpm-lock.yaml"), lockfile);
+}
+
+function isInside(directory, path) {
+  const pathFromDirectory = relative(directory, path);
+  return (
+    pathFromDirectory === "" ||
+    (!isAbsolute(pathFromDirectory) &&
+      pathFromDirectory !== ".." &&
+      !pathFromDirectory.startsWith(`..${sep}`))
+  );
+}
+
+async function assertConsumerDependenciesAreIsolated(consumerDirectory, dependencyNames) {
+  for (const dependency of dependencyNames) {
+    const installedPath = await realpath(
+      join(consumerDirectory, "node_modules", ...dependency.split("/"))
+    );
+    assert.ok(
+      !isInside(rootDirectory, installedPath),
+      `${dependency} must be installed into the consumer from archives or its offline dependency store, not the checkout`
+    );
+  }
 }
 
 async function verifyCliHelp(consumerDirectory, name) {
@@ -125,6 +224,11 @@ try {
   ]);
   const archives = await packAndInspect(packages, packDirectory);
   await installPackedPackages(packages, archives, consumerDirectory);
+  await assertConsumerDependenciesAreIsolated(consumerDirectory, [
+    ...packages.map((item) => item.manifest.name),
+    "zod",
+    "sharp"
+  ]);
   for (const name of ["dk-audio", "dk-image", "dk-video"]) {
     await verifyCliHelp(consumerDirectory, name);
   }

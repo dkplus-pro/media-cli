@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { execFile as execFileCallback } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, copyFile, link, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { describe, it } from "node:test";
 import { promisify } from "node:util";
 
@@ -59,6 +59,39 @@ async function filmstripQuadrant(path, left, top, width, height) {
   return (await loadImage(path)).extract({ left, top, width, height }).raw().toBuffer();
 }
 
+function unsupportedLinkError(error) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    ["EACCES", "EPERM", "ENOSYS", "ENOTSUP", "EOPNOTSUPP"].includes(error.code)
+  );
+}
+
+async function assertAliasDoesNotOverwriteSource(createOutputAlias, writeMedia) {
+  await withTemporaryDirectory(async (directory) => {
+    const inputPath = join(directory, "source.mp4");
+    const outputPath = join(directory, "output.mp4");
+    await copyFile(videoFixture, inputPath);
+    const originalContents = await readFile(inputPath);
+
+    try {
+      await createOutputAlias(inputPath, outputPath);
+    } catch (error) {
+      if (unsupportedLinkError(error)) {
+        return;
+      }
+      throw error;
+    }
+
+    await assert.rejects(
+      () => writeMedia(inputPath, outputPath),
+      (error) => error instanceof CliError && error.code === "INVALID_ARGUMENT"
+    );
+    assert.deepEqual(await readFile(inputPath), originalContents);
+  });
+}
+
 describe("media adapters", () => {
   it("normalizes metadata from short deterministic audio and video fixtures", async () => {
     const [audio, video] = await Promise.all([probeAudio(audioFixture), probeVideo(videoFixture)]);
@@ -83,6 +116,63 @@ describe("media adapters", () => {
       assert.equal(metadata.channels, 1);
       assert.equal(metadata.sampleRate, 44100);
     });
+  });
+
+  it("rejects force-enabled extract-audio outputs that alias the input without altering the source", async () => {
+    await withTemporaryDirectory(async (directory) => {
+      const inputPath = join(directory, "source.mp4");
+      await copyFile(videoFixture, inputPath);
+      const originalContents = await readFile(inputPath);
+      const relativeInputPath = relative(process.cwd(), inputPath);
+
+      await assert.rejects(
+        () => extractAudio(relativeInputPath, `./${relativeInputPath}`, { force: true }),
+        (error) => error instanceof CliError && error.code === "INVALID_ARGUMENT"
+      );
+      assert.deepEqual(await readFile(inputPath), originalContents);
+    });
+
+    for (const createOutputAlias of [
+      (inputPath, outputPath) => symlink(inputPath, outputPath),
+      (inputPath, outputPath) => link(inputPath, outputPath)
+    ]) {
+      await assertAliasDoesNotOverwriteSource(createOutputAlias, (inputPath, outputPath) =>
+        extractAudio(inputPath, outputPath, { force: true })
+      );
+    }
+  });
+
+  it("rejects filmstrip outputs that alias the input without altering the source", async () => {
+    await withTemporaryDirectory(async (directory) => {
+      const inputPath = join(directory, "source.mp4");
+      await copyFile(videoFixture, inputPath);
+      const originalContents = await readFile(inputPath);
+      const relativeInputPath = relative(process.cwd(), inputPath);
+
+      await assert.rejects(
+        () =>
+          createFilmstrip(relativeInputPath, `./${relativeInputPath}`, {
+            timestamps: [0, 1, 2, 3],
+            width: 320,
+            height: 180
+          }),
+        (error) => error instanceof CliError && error.code === "INVALID_ARGUMENT"
+      );
+      assert.deepEqual(await readFile(inputPath), originalContents);
+    });
+
+    for (const createOutputAlias of [
+      (inputPath, outputPath) => symlink(inputPath, outputPath),
+      (inputPath, outputPath) => link(inputPath, outputPath)
+    ]) {
+      await assertAliasDoesNotOverwriteSource(createOutputAlias, (inputPath, outputPath) =>
+        createFilmstrip(inputPath, outputPath, {
+          timestamps: [0, 1, 2, 3],
+          width: 320,
+          height: 180
+        })
+      );
+    }
   });
 
   it("creates a two-by-two filmstrip whose quadrants match all four requested timestamps", async () => {

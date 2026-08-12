@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -119,6 +119,27 @@ describe("dk-video public APIs", () => {
       assert.deepEqual(filmstrip.timestamps, [0, 1, 2, 3]);
       assert.equal(filmstrip.width, 320);
       assert.equal(filmstrip.height, 180);
+    });
+  });
+
+  it("rejects invalid filmstrip output extensions before force can overwrite an existing file", async () => {
+    await withTemporaryDirectory(async (directory) => {
+      const outputPath = join(directory, "filmstrip.txt");
+      await writeFile(outputPath, "preserve this output");
+
+      for (const force of [false, true]) {
+        await assert.rejects(
+          () =>
+            createVideoFilmstrip(videoPath, outputPath, {
+              timestamps: [0, 1, 2, 3],
+              width: 320,
+              height: 180,
+              force
+            }),
+          (error) => error instanceof CliError && error.code === "INVALID_ARGUMENT"
+        );
+        assert.equal(await readFile(outputPath, "utf8"), "preserve this output");
+      }
     });
   });
 

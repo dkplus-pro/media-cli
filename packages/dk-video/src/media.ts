@@ -199,6 +199,13 @@ export async function createVideoFilmstrip(
   outputPath: string,
   options: CreateVideoFilmstripOptions
 ): Promise<VideoFilmstrip> {
+  const expectedFormat = imageFormatFromPath(outputPath);
+  if (expectedFormat === undefined) {
+    throw new CliError({
+      code: "INVALID_ARGUMENT",
+      message: "Filmstrip output must be a JPEG, PNG, or WebP image."
+    });
+  }
   if (!options.force && (await outputExists(outputPath))) {
     throw outputExistsError();
   }
@@ -213,8 +220,7 @@ export async function createVideoFilmstrip(
     readFile(outputPath),
     readImageMetadata(outputPath)
   ]);
-  const expectedFormat = imageFormatFromPath(outputPath);
-  if (expectedFormat === undefined || expectedFormat !== metadata.format) {
+  if (expectedFormat !== metadata.format) {
     throw new CliError({
       code: "INVALID_ARGUMENT",
       message: "Filmstrip output must be a JPEG, PNG, or WebP image."

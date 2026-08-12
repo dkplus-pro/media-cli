@@ -1,5 +1,6 @@
 import { CliError } from "@dkplus/contracts";
 
+import { assertOutputPathIsDistinct } from "./output.js";
 import { mediaProcessFailed, runMediaTool, type MediaProcessOptions } from "./process.js";
 
 export interface AudioMetadata {
@@ -90,12 +91,7 @@ export async function extractAudio(
   outputPath: string,
   options: ExtractAudioOptions = {}
 ): Promise<void> {
-  if (inputPath === outputPath) {
-    throw new CliError({
-      code: "INVALID_ARGUMENT",
-      message: "Audio output must differ from the input path."
-    });
-  }
+  await assertOutputPathIsDistinct(inputPath, outputPath, "Audio output");
 
   await runMediaTool(
     "ffmpeg",

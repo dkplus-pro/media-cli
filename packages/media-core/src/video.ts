@@ -1,4 +1,5 @@
 import { mediaProcessFailed, runMediaTool, type MediaProcessOptions } from "./process.js";
+import { assertOutputPathIsDistinct } from "./output.js";
 
 export interface VideoMetadata {
   durationMs: number;
@@ -132,6 +133,7 @@ export async function createFilmstrip(
   options: FilmstripOptions
 ): Promise<FilmstripResult> {
   validateFilmstripOptions(options);
+  await assertOutputPathIsDistinct(inputPath, outputPath, "Filmstrip output");
   const tileWidth = options.width / 2;
   const tileHeight = options.height / 2;
   const [first, second, third, fourth] = options.timestamps;
