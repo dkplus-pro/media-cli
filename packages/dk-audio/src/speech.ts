@@ -33,6 +33,8 @@ export interface TranslateTranscriptOptions {
   translator?: TranscriptTranslator;
 }
 
+export interface TranslateAudioOptions extends TranslateTranscriptOptions, TranscribeAudioOptions {}
+
 export const transcriptSummarySchema = z
   .object({
     summary: z.string().min(1),
@@ -138,6 +140,24 @@ export async function translateTranscript(
     throw transcriptSourceMismatch();
   }
   return translated;
+}
+
+/**
+ * Internal CLI composition for raw-audio translation. This module-level export
+ * is intentionally not re-exported by the package root.
+ */
+export async function translateAudio(
+  audioPath: string,
+  options: TranslateAudioOptions
+): Promise<Transcript> {
+  const transcript = await transcribeAudio(audioPath, {
+    transcriber: options.transcriber,
+    ...(options.language === undefined ? {} : { language: options.language })
+  });
+  return translateTranscript(transcript, {
+    targetLanguage: options.targetLanguage,
+    translator: options.translator
+  });
 }
 
 export async function summarizeTranscript(

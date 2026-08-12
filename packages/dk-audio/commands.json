@@ -10,8 +10,8 @@
     },
     {
       "command": "speech translate",
-      "description": "Translate a canonical transcript through an injected translator adapter.",
-      "input": { "type": "transcript-json" },
+      "description": "Translate a canonical transcript or audio file through injected adapters.",
+      "input": { "oneOf": [{ "type": "transcript-json" }, { "type": "audio-file" }] },
       "outputs": ["transcript-json"]
     },
     {

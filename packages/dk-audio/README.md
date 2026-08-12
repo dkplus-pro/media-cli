@@ -14,6 +14,7 @@ dk-audio speech summarize transcript.json --json
 dk-audio music metadata song.wav --json
 dk-audio music analyze song.wav --jsonl
 dk-audio speech translate transcript.json --to zh --json
+dk-audio speech translate recording.wav --to zh --json
 ```
 
 All commands accept `--help`, `--version`, `--schema`, `--config <path>`,
@@ -26,7 +27,7 @@ Use `dk-audio speech summarize --schema --json` to inspect a command contract.
 | Command | Input | Output |
 | --- | --- | --- |
 | `speech transcribe` | audio file | canonical transcript |
-| `speech translate --to <language>` | canonical transcript | canonical transcript |
+| `speech translate --to <language>` | canonical transcript or audio file | canonical transcript |
 | `speech summarize` | canonical transcript | typed summary |
 | `music metadata` | audio file | deterministic metadata |
 | `music emotion` | audio file | typed emotion |
@@ -41,7 +42,11 @@ The machine-readable command list is [commands.json](./commands.json).
 `AUDIO_TRANSCRIBER_UNAVAILABLE` until an application supplies such an adapter;
 it never forwards raw audio bytes to a Qwen-compatible Chat endpoint.
 
-`translateTranscript` similarly requires an injected `TranscriptTranslator`.
+`translateTranscript` similarly requires an injected `TranscriptTranslator`. For
+`speech translate <audio-file>`, the CLI composes the explicit
+`AudioTranscriber` and `TranscriptTranslator`: audio → canonical fingerprinted
+transcript → translation. Like transcribe, this is mock/injected-only and never
+sends raw audio to a Qwen-compatible Chat endpoint.
 `summarizeTranscript` and `analyzeMusicEmotion` accept a typed `AIProvider` and
 send feature-routed tasks using `audio.speech.summarize` and
 `audio.music.emotion`, respectively. The domain package does not read API keys,
@@ -69,11 +74,11 @@ from local `ffprobe` data. Music tags that are unavailable locally (`bpm`,
 
 ## Validation and tests
 
-Inputs to translate and summarize are parsed with the canonical `Transcript`
-contract. Malformed input produces `INVALID_TRANSCRIPT`; missing adapters and
-providers produce typed configuration errors. Tests cover help, version, schema,
-JSON envelopes, malformed transcript errors, all six APIs, and the six-command
-manifest.
+Transcript inputs to translate and summarize are parsed with the canonical
+`Transcript` contract. Malformed transcript input produces `INVALID_TRANSCRIPT`;
+missing adapters and providers produce typed configuration errors. Tests cover
+help, version, schema, JSON envelopes, raw-audio translation, malformed
+transcript errors, all six APIs, and the six-command manifest.
 
 ```bash
 pnpm --filter @dkplus/dk-audio build

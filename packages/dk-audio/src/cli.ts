@@ -29,10 +29,10 @@ import {
   readAudioMetadata,
   summarizeTranscript,
   transcribeAudio,
-  translateTranscript,
   type AudioTranscriber,
   type TranscriptTranslator
 } from "./index.js";
+import { translateAudio, translateTranscript } from "./speech.js";
 
 const VERSION = "0.1.0";
 
@@ -129,6 +129,10 @@ async function readCanonicalTranscript(input: string) {
   return parseTranscript(raw);
 }
 
+function isCanonicalTranscriptInput(input: string): boolean {
+  return input.trim().startsWith("{") || input.toLowerCase().endsWith(".json");
+}
+
 function createCommands(dependencies: AudioCliDependencies) {
   const transcribe: CommandDefinition<AudioPathInput, unknown> = {
     name: "speech transcribe",
@@ -140,15 +144,23 @@ function createCommands(dependencies: AudioCliDependencies) {
   };
   const translate: CommandDefinition<TranslateInput, unknown> = {
     name: "speech translate",
-    description: "Translate a canonical transcript through a configured translator adapter.",
+    description: "Translate a canonical transcript or audio file through configured adapters.",
     version: VERSION,
     inputSchema: translateInputSchema,
     outputSchema: outputSchema(["kind", "schemaVersion", "sourceFingerprint", "language", "segments"]),
-    execute: async ({ transcriptInput, targetLanguage }) =>
-      translateTranscript(await readCanonicalTranscript(transcriptInput), {
+    execute: async ({ transcriptInput, targetLanguage }) => {
+      if (isCanonicalTranscriptInput(transcriptInput)) {
+        return translateTranscript(await readCanonicalTranscript(transcriptInput), {
+          targetLanguage,
+          translator: dependencies.translator
+        });
+      }
+      return translateAudio(transcriptInput, {
         targetLanguage,
+        transcriber: dependencies.transcriber,
         translator: dependencies.translator
-      })
+      });
+    }
   };
   const summarize: CommandDefinition<TranscriptInput, unknown> = {
     name: "speech summarize",
@@ -190,14 +202,17 @@ function createCommands(dependencies: AudioCliDependencies) {
   return { transcribe, translate, summarize, metadata, emotion, analyze };
 }
 
-function writeHelp(writer: OutputWriter, command?: { name: string; description: string }): void {
+function helpText(command?: { name: string; description: string }): string {
   if (command !== undefined) {
-    writer.write(`${command.name}: ${command.description}\n`);
-  } else {
-    writer.write("Usage: dk-audio <speech|music> <command> [input] [options]\n\n");
-    writer.write("Commands: speech transcribe, speech translate, speech summarize, music metadata, music emotion, music analyze\n");
+    return `${command.name}: ${command.description}\n${baseOptions.map((option) => option.flag).join(", ")}, --schema\n`;
   }
-  writer.write(`${baseOptions.map((option) => option.flag).join(", ")}, --schema\n`);
+  return "Usage: dk-audio <speech|music> <command> [input] [options]\n\n" +
+    "Commands: speech transcribe, speech translate, speech summarize, music metadata, music emotion, music analyze\n" +
+    `${baseOptions.map((option) => option.flag).join(", ")}, --schema\n`;
+}
+
+function writeHelp(writer: OutputWriter, command?: { name: string; description: string }): void {
+  writer.write(helpText(command));
 }
 
 function optionValue(argumentsList: readonly string[], name: string): string | undefined {
@@ -314,10 +329,30 @@ export async function runAudioCli(
   const [namespace, action, ...commandArguments] = parsed.positionals;
   if (parsed.options.help) {
     const command = namespace !== undefined && action !== undefined ? namedCommand(`${namespace} ${action}`, commands) : undefined;
+    if (parsed.options.json || parsed.options.jsonl) {
+      emitResult(
+        createSuccessResult(
+          { command: `${command?.name ?? "dk-audio"} help`, version: VERSION },
+          { help: helpText(command) }
+        ),
+        { mode: parsed.options.jsonl ? "jsonl" : "json", stdout }
+      );
+      return { exitCode: 0 };
+    }
     writeHelp(stdout, command);
     return { exitCode: 0 };
   }
   if (parsed.options.version) {
+    if (parsed.options.json || parsed.options.jsonl) {
+      emitResult(
+        createSuccessResult(
+          { command: "dk-audio version", version: VERSION },
+          { version: VERSION }
+        ),
+        { mode: parsed.options.jsonl ? "jsonl" : "json", stdout }
+      );
+      return { exitCode: 0 };
+    }
     stdout.write(`${VERSION}\n`);
     return { exitCode: 0 };
   }

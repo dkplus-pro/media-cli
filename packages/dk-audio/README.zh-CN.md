@@ -13,6 +13,7 @@ dk-audio speech summarize transcript.json --json
 dk-audio music metadata song.wav --json
 dk-audio music analyze song.wav --jsonl
 dk-audio speech translate transcript.json --to zh --json
+dk-audio speech translate recording.wav --to zh --json
 ```
 
 所有命令支持 `--help`、`--version`、`--schema`、`--config <path>`、`--json`、
@@ -25,7 +26,7 @@ dk-audio speech translate transcript.json --to zh --json
 | 命令 | 输入 | 输出 |
 | --- | --- | --- |
 | `speech transcribe` | 音频文件 | 规范 Transcript |
-| `speech translate --to <language>` | 规范 Transcript | 规范 Transcript |
+| `speech translate --to <language>` | 规范 Transcript 或音频文件 | 规范 Transcript |
 | `speech summarize` | 规范 Transcript | 类型化总结 |
 | `music metadata` | 音频文件 | 确定性元数据 |
 | `music emotion` | 音频文件 | 类型化情绪 |
@@ -40,7 +41,10 @@ dk-audio speech translate transcript.json --to zh --json
 `AUDIO_TRANSCRIBER_UNAVAILABLE`；它绝不会把原始音频二进制静默发送给
 Qwen 兼容 Chat 接口。
 
-`translateTranscript` 同样需要注入 `TranscriptTranslator`。
+`translateTranscript` 同样需要注入 `TranscriptTranslator`。使用
+`speech translate <audio-file>` 时，CLI 会组合显式的 `AudioTranscriber` 与
+`TranscriptTranslator`：音频 → 带指纹的规范 Transcript → 翻译。与转写一样，
+该流程仅可通过 mock/注入适配器使用，绝不会将原始音频发送给 Qwen 兼容 Chat 接口。
 `summarizeTranscript` 和 `analyzeMusicEmotion` 接收类型化 `AIProvider`，并分别
 使用 `audio.speech.summarize` 和 `audio.music.emotion` 路由。领域包不会读取
 API Key、提供商 URL 或环境凭据。
@@ -50,9 +54,10 @@ API Key、提供商 URL 或环境凭据。
 
 ## 校验与测试
 
-翻译和总结输入会通过规范 `Transcript` 契约解析。格式错误会得到
+翻译和总结的 Transcript 输入会通过规范 `Transcript` 契约解析。格式错误会得到
 `INVALID_TRANSCRIPT`；缺少适配器或提供商会得到类型化配置错误。测试覆盖帮助、
-版本、schema、JSON 信封、格式错误 Transcript、全部六个 API 和六命令清单。
+版本、schema、JSON 信封、原始音频翻译、格式错误 Transcript、全部六个 API 和
+六命令清单。
 
 ```bash
 pnpm --filter @dkplus/dk-audio build

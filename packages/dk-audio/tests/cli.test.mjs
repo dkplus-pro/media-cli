@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
 import { createMockProvider } from "@dkplus/ai-core";
+import { fixturePath } from "@dkplus/testing";
 
 import { runAudioCli } from "../dist/cli.js";
 
@@ -36,6 +37,22 @@ describe("dk-audio CLI", () => {
     const envelope = JSON.parse(schema.stdout.join(""));
     assert.equal(envelope.success, true);
     assert.equal(envelope.data.name, "speech summarize");
+  });
+
+  it("emits one JSON envelope for help and version in JSON mode", async () => {
+    const help = writers();
+    assert.equal((await runAudioCli(["--help", "--json"], { ...help.writers })).exitCode, 0);
+    assert.equal(help.stdout.length, 1);
+    const helpEnvelope = JSON.parse(help.stdout[0]);
+    assert.equal(helpEnvelope.success, true);
+    assert.match(helpEnvelope.data.help, /speech transcribe/u);
+
+    const version = writers();
+    assert.equal((await runAudioCli(["--version", "--json"], { ...version.writers })).exitCode, 0);
+    assert.equal(version.stdout.length, 1);
+    const versionEnvelope = JSON.parse(version.stdout[0]);
+    assert.equal(versionEnvelope.success, true);
+    assert.equal(versionEnvelope.data.version, "0.1.0");
   });
 
   it("emits one JSON envelope for a valid command", async () => {
@@ -75,6 +92,34 @@ describe("dk-audio CLI", () => {
 
     assert.equal(result.exitCode, 1);
     assert.equal(JSON.parse(output.stdout.join("")).error.code, "AUDIO_TRANSCRIBER_UNAVAILABLE");
+  });
+
+  it("translates an audio file through injected raw-audio and transcript adapters", async () => {
+    const output = writers();
+    const calls = [];
+    const result = await runAudioCli(
+      ["speech", "translate", fixturePath("short-audio.wav"), "--to", "zh", "--json"],
+      {
+        ...output.writers,
+        transcriber: {
+          async transcribe(task) {
+            calls.push(task.feature);
+            return { ...transcript, sourceFingerprint: task.sourceFingerprint };
+          }
+        },
+        translator: {
+          async translate(task) {
+            calls.push(task.transcript.sourceFingerprint.value);
+            return { ...task.transcript, language: task.targetLanguage };
+          }
+        }
+      }
+    );
+
+    assert.equal(result.exitCode, 0);
+    const envelope = JSON.parse(output.stdout.join(""));
+    assert.equal(envelope.data.language, "zh");
+    assert.deepEqual(calls, ["audio.speech.transcribe", envelope.data.sourceFingerprint.value]);
   });
 
   it("publishes exactly the six phase-one commands", async () => {

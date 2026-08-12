@@ -13,6 +13,7 @@ import {
   transcribeAudio,
   translateTranscript
 } from "../dist/index.js";
+import { translateAudio } from "../dist/speech.js";
 
 const audioPath = fixturePath("short-audio.wav");
 const sourceFingerprint = {
@@ -66,6 +67,28 @@ describe("dk-audio public APIs", () => {
       () => translateTranscript({ ...transcript, segments: [{ ...transcript.segments[0], endMs: -1 }] }, { targetLanguage: "zh" }),
       (error) => error instanceof CliError && error.code === "INVALID_TRANSCRIPT"
     );
+  });
+
+  it("translates an audio file by composing injected transcription and translation adapters", async () => {
+    const calls = [];
+    const result = await translateAudio(audioPath, {
+      targetLanguage: "zh",
+      transcriber: {
+        async transcribe(task) {
+          calls.push(task.feature);
+          return { ...transcript, sourceFingerprint: task.sourceFingerprint };
+        }
+      },
+      translator: {
+        async translate(task) {
+          calls.push(task.transcript.sourceFingerprint.value);
+          return { ...task.transcript, language: task.targetLanguage };
+        }
+      }
+    });
+
+    assert.deepEqual(calls, ["audio.speech.transcribe", result.sourceFingerprint.value]);
+    assert.equal(result.language, "zh");
   });
 
   it("summarizes a validated transcript through the speech summary feature", async () => {
