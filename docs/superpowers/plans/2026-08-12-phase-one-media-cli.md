@@ -46,12 +46,12 @@ Files: create packages/ai-core source for task types, config, feature resolver, 
 
 Produces: AIProvider.execute(task), FeatureResolver.resolve(feature), mock, Azure GPT-4o, and Qwen-compatible providers.
 
-- [ ] Test that audio.speech.summarize resolves to an Azure profile and Azure sends api-key auth to the configured deployment chat-completions endpoint.
-- [ ] Run ai-core tests; expect missing modules.
-- [ ] Implement typed tasks with feature, prompt, optional images, and Zod parsing. Azure treats the configured model as its deployment and calls openai/deployments/{deployment}/chat/completions with a configurable API version; Qwen uses Bearer auth at baseUrl/chat/completions.
-- [ ] Support canonical Azure variables AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT, and AZURE_OPENAI_API_VERSION plus compatible aliases AZURE_OPENAI_KEY and AZURE_OPENAI_MODEL. Support DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, and DASHSCOPE_MODEL plus compatible QWEN_API_KEY and QWEN_BASE_URL aliases; default the compatible text model only when the profile supplies no model.
-- [ ] Verify all provider tests use stubbed fetch and read no real environment values.
-- [ ] Commit: feat: add ai feature routing.
+- [x] Test that audio.speech.summarize resolves to an Azure profile and Azure sends api-key auth to the configured deployment chat-completions endpoint.
+- [x] Run ai-core tests; expect missing modules.
+- [x] Implement typed tasks with feature, prompt, optional images, and Zod parsing. Azure treats the configured model as its deployment and calls openai/deployments/{deployment}/chat/completions with a configurable API version; Qwen uses Bearer auth at baseUrl/chat/completions.
+- [x] Support canonical Azure variables AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT, and AZURE_OPENAI_API_VERSION plus compatible aliases AZURE_OPENAI_KEY and AZURE_OPENAI_MODEL. Support DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, and DASHSCOPE_MODEL plus compatible QWEN_API_KEY and QWEN_BASE_URL aliases; default the compatible text model only when the profile supplies no model.
+- [x] Verify all provider tests use stubbed fetch and read no real environment values.
+- [x] Commit: feat: add ai feature routing.
 
 ### Task 4: Add media-core and fixtures
 
@@ -59,11 +59,11 @@ Files: create packages/media-core source for process, fingerprint, audio, video,
 
 Produces: probeAudio, probeVideo, extractAudio, createFilmstrip, loadImage, readImageMetadata, watermarkImage, and fingerprintFile.
 
-- [ ] Test video probe, a two-by-two filmstrip with four frames, and watermark output dimensions.
-- [ ] Run media-core tests; expect absent adapters and fixtures.
-- [ ] Implement shell-free FFmpeg and ffprobe spawning; map failures to MEDIA_TOOL_UNAVAILABLE or MEDIA_PROCESS_FAILED; use Sharp for static JPEG, PNG, and WebP.
-- [ ] Verify deterministic media tests without network access.
-- [ ] Commit: feat: add deterministic media core.
+- [x] Test video probe, a two-by-two filmstrip with four frames, and watermark output dimensions.
+- [x] Run media-core tests; expect absent adapters and fixtures.
+- [x] Implement shell-free FFmpeg and ffprobe spawning; map failures to MEDIA_TOOL_UNAVAILABLE or MEDIA_PROCESS_FAILED; use Sharp for static JPEG, PNG, and WebP.
+- [x] Verify deterministic media tests without network access.
+- [x] Commit: feat: add deterministic media core.
 
 ### Task 5: Build dk-audio
 
