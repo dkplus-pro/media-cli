@@ -135,6 +135,37 @@ importers:
         specifier: ^24.10.2
         version: 24.13.2
 
+  packages/dk-audio:
+    dependencies:
+      '@dkplus/ai-core':
+        specifier: workspace:*
+        version: link:../ai-core
+      '@dkplus/cli-core':
+        specifier: workspace:*
+        version: link:../cli-core
+      '@dkplus/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@dkplus/media-core':
+        specifier: workspace:*
+        version: link:../media-core
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      '@dkplus/testing':
+        specifier: workspace:*
+        version: link:../testing
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@repo/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      '@types/node':
+        specifier: ^24.10.2
+        version: 24.13.2
+
   packages/eslint-config:
     dependencies:
       '@eslint/js':

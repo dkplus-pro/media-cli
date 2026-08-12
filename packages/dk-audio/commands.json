@@ -1,0 +1,42 @@
+{
+  "package": "@dkplus/dk-audio",
+  "binary": "dk-audio",
+  "commands": [
+    {
+      "command": "speech transcribe",
+      "description": "Transcribe audio through an injected raw-audio adapter.",
+      "input": { "type": "audio-file" },
+      "outputs": ["transcript-json"]
+    },
+    {
+      "command": "speech translate",
+      "description": "Translate a canonical transcript through an injected translator adapter.",
+      "input": { "type": "transcript-json" },
+      "outputs": ["transcript-json"]
+    },
+    {
+      "command": "speech summarize",
+      "description": "Summarize a canonical transcript with a feature-routed AI provider.",
+      "input": { "type": "transcript-json" },
+      "outputs": ["summary-json"]
+    },
+    {
+      "command": "music metadata",
+      "description": "Read deterministic local audio metadata.",
+      "input": { "type": "audio-file" },
+      "outputs": ["music-metadata-json"]
+    },
+    {
+      "command": "music emotion",
+      "description": "Analyze music emotion with a feature-routed AI provider.",
+      "input": { "type": "audio-file" },
+      "outputs": ["music-emotion-json"]
+    },
+    {
+      "command": "music analyze",
+      "description": "Combine exactly music metadata and emotion.",
+      "input": { "type": "audio-file" },
+      "outputs": ["music-analysis-json"]
+    }
+  ]
+}
