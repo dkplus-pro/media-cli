@@ -118,6 +118,25 @@ describe("media adapters", () => {
     });
   });
 
+  it("stops before FFmpeg when the audio output path cannot be inspected", async () => {
+    let processWasStarted = false;
+
+    await assert.rejects(
+      () =>
+        extractAudio(videoFixture, "/dev/null/audio.wav", {
+          processRunner: async () => {
+            processWasStarted = true;
+            return { exitCode: 0, stdout: "", stderr: "" };
+          }
+        }),
+      (error) =>
+        error instanceof CliError &&
+        error.code === "INVALID_ARGUMENT" &&
+        !error.message.includes("/dev/null")
+    );
+    assert.equal(processWasStarted, false);
+  });
+
   it("rejects force-enabled extract-audio outputs that alias the input without altering the source", async () => {
     await withTemporaryDirectory(async (directory) => {
       const inputPath = join(directory, "source.mp4");

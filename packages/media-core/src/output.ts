@@ -10,6 +10,17 @@ function sameInputOutputError(outputDescription: string): CliError {
   });
 }
 
+function outputPathInspectionError(): CliError {
+  return new CliError({
+    code: "INVALID_ARGUMENT",
+    message: "Unable to inspect media output path."
+  });
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
 export async function assertOutputPathIsDistinct(
   inputPath: string,
   outputPath: string,
@@ -19,14 +30,27 @@ export async function assertOutputPathIsDistinct(
     throw sameInputOutputError(outputDescription);
   }
 
+  let outputStats;
   try {
-    const [inputStats, outputStats] = await Promise.all([stat(inputPath), stat(outputPath)]);
-    if (inputStats.dev === outputStats.dev && inputStats.ino === outputStats.ino) {
-      throw sameInputOutputError(outputDescription);
-    }
+    outputStats = await stat(outputPath);
   } catch (error) {
-    if (error instanceof CliError) {
-      throw error;
+    if (isNotFoundError(error)) {
+      return;
     }
+    throw outputPathInspectionError();
+  }
+
+  let inputStats;
+  try {
+    inputStats = await stat(inputPath);
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return;
+    }
+    throw outputPathInspectionError();
+  }
+
+  if (inputStats.dev === outputStats.dev && inputStats.ino === outputStats.ino) {
+    throw sameInputOutputError(outputDescription);
   }
 }

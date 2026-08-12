@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstat, mkdtemp, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdtemp,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, sep } from "node:path";
 
@@ -87,7 +96,14 @@ async function installPackedPackages(packages, archives, consumerDirectory) {
       })
     )
   );
-  const packedDependencies = Object.fromEntries(archiveSpecifications);
+  const cliPackageNames = ["@dkplus/dk-audio", "@dkplus/dk-image", "@dkplus/dk-video"];
+  const cliDependencies = Object.fromEntries(
+    cliPackageNames.map((name) => {
+      const specification = archiveSpecifications.get(name);
+      assert.ok(specification, `missing archive specification for ${name}`);
+      return [name, specification];
+    })
+  );
   const externalDependencies = { sharp: "0.34.5", zod: "3.25.76" };
   await writeFile(
     join(consumerDirectory, "package.json"),
@@ -95,7 +111,7 @@ async function installPackedPackages(packages, archives, consumerDirectory) {
       name: "dkplus-smoke-consumer",
       private: true,
       version: "0.0.0",
-      dependencies: { ...packedDependencies, ...externalDependencies }
+      dependencies: cliDependencies
     })}\n`
   );
   await writeConsumerLockfile(
@@ -103,10 +119,14 @@ async function installPackedPackages(packages, archives, consumerDirectory) {
     archives,
     archiveSpecifications,
     consumerDirectory,
-    { ...packedDependencies, ...externalDependencies },
+    cliDependencies,
     externalDependencies
   );
-  await run("pnpm", ["install", "--offline", "--ignore-scripts", "--frozen-lockfile"], consumerDirectory);
+  await run(
+    "pnpm",
+    ["install", "--offline", "--ignore-scripts", "--frozen-lockfile"],
+    consumerDirectory
+  );
 }
 
 async function writeConsumerLockfile(
