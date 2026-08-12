@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { cp, mkdtemp, mkdir, readdir, readFile, rm, symlink } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 const rootDirectory = process.cwd();
 const packagesDirectory = join(rootDirectory, "packages");
@@ -48,10 +48,6 @@ async function publicPackages() {
     .sort((left, right) => left.manifest.name.localeCompare(right.manifest.name));
 }
 
-function packagePath(name) {
-  return join("node_modules", ...name.split("/"));
-}
-
 async function packAndInspect(packages, packDirectory) {
   const archives = new Map();
   for (const item of packages) {
@@ -80,39 +76,41 @@ async function packAndInspect(packages, packDirectory) {
   return archives;
 }
 
-async function copyInstall(packages, archives, consumerDirectory) {
-  for (const item of packages) {
-    const extractionDirectory = await mkdtemp(join(tmpdir(), "dkplus-packed-package-"));
-    try {
-      await run(
-        "tar",
-        ["-xzf", archives.get(item.manifest.name), "-C", extractionDirectory],
-        rootDirectory
-      );
-      const target = join(consumerDirectory, packagePath(item.manifest.name));
-      await mkdir(dirname(target), { recursive: true });
-      await cp(join(extractionDirectory, "package"), target, { recursive: true });
-    } finally {
-      await rm(extractionDirectory, { recursive: true, force: true });
-    }
-  }
-
-  for (const dependency of ["zod", "sharp"]) {
-    const target = join(consumerDirectory, "node_modules", dependency);
-    await mkdir(dirname(target), { recursive: true });
-    await symlink(
-      resolve(rootDirectory, "node_modules", ".pnpm", "node_modules", dependency),
-      target,
-      "dir"
-    );
-  }
+async function installPackedPackages(packages, archives, consumerDirectory) {
+  const packedDependencies = Object.fromEntries(
+    packages.map((item) => [item.manifest.name, `file:${archives.get(item.manifest.name)}`])
+  );
+  const dependencies = {
+    ...packedDependencies,
+    zod: `link:${resolve(rootDirectory, "packages/ai-core/node_modules/zod")}`,
+    sharp: `link:${resolve(rootDirectory, "packages/media-core/node_modules/sharp")}`
+  };
+  await writeFile(
+    join(consumerDirectory, "package.json"),
+    `${JSON.stringify({
+      name: "dkplus-smoke-consumer",
+      private: true,
+      version: "0.0.0",
+      dependencies
+    })}\n`
+  );
+  await writeFile(
+    join(consumerDirectory, "pnpm-workspace.yaml"),
+    `overrides:\n${Object.entries(dependencies)
+      .map(([name, specification]) => `  ${JSON.stringify(name)}: ${JSON.stringify(specification)}`)
+      .join("\n")}\n`
+  );
+  await run("pnpm", ["install", "--offline", "--ignore-scripts"], consumerDirectory);
 }
 
 async function verifyCliHelp(consumerDirectory, name) {
-  const packageDirectory = join(consumerDirectory, packagePath(`@dkplus/${name}`));
-  const manifest = JSON.parse(await readFile(join(packageDirectory, "package.json"), "utf8"));
-  const binaryPath = join(packageDirectory, manifest.bin[name]);
-  const output = await run(process.execPath, [binaryPath, "--help"], consumerDirectory);
+  const installedBinary = join(consumerDirectory, "node_modules", ".bin", name);
+  const binaryStats = await lstat(installedBinary);
+  assert.ok(
+    binaryStats.isFile() || binaryStats.isSymbolicLink(),
+    `${name} must be available through the consumer node_modules/.bin directory`
+  );
+  const output = await run(installedBinary, ["--help"], consumerDirectory);
   assert.match(output, new RegExp(`Usage: ${name}`, "u"));
 }
 
@@ -123,10 +121,10 @@ try {
   const consumerDirectory = join(temporaryDirectory, "consumer");
   await Promise.all([
     mkdir(packDirectory, { recursive: true }),
-    mkdir(join(consumerDirectory, "node_modules"), { recursive: true })
+    mkdir(consumerDirectory, { recursive: true })
   ]);
   const archives = await packAndInspect(packages, packDirectory);
-  await copyInstall(packages, archives, consumerDirectory);
+  await installPackedPackages(packages, archives, consumerDirectory);
   for (const name of ["dk-audio", "dk-image", "dk-video"]) {
     await verifyCliHelp(consumerDirectory, name);
   }
