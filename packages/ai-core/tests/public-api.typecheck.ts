@@ -1,10 +1,6 @@
 import { z } from "zod";
 
-import {
-  createAzureOpenAIProvider,
-  type AITask,
-  type AzureOpenAIConfig
-} from "../src/index.js";
+import { createAzureOpenAIProvider, type AITask, type AzureOpenAIConfig } from "../src/index.js";
 
 const config: AzureOpenAIConfig = {
   endpoint: "https://example.openai.azure.com",

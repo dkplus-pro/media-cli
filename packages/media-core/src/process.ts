@@ -74,7 +74,8 @@ export async function runMediaTool(
   argumentsList: readonly string[],
   options: MediaProcessOptions = {}
 ): Promise<ProcessResult> {
-  const command = tool === "ffmpeg" ? (options.ffmpegPath ?? "ffmpeg") : (options.ffprobePath ?? "ffprobe");
+  const command =
+    tool === "ffmpeg" ? (options.ffmpegPath ?? "ffmpeg") : (options.ffprobePath ?? "ffprobe");
   const runner = options.processRunner ?? defaultProcessRunner;
 
   let result: ProcessResult;

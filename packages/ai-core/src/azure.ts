@@ -6,7 +6,10 @@ function defaultFetch(url: string, request: Parameters<FetchLike>[1]): ReturnTyp
   return fetch(url, request);
 }
 
-export function createAzureOpenAIProvider(config: AzureOpenAIConfig, fetcher: FetchLike = defaultFetch): AIProvider {
+export function createAzureOpenAIProvider(
+  config: AzureOpenAIConfig,
+  fetcher: FetchLike = defaultFetch
+): AIProvider {
   const endpoint = normalizeAzureEndpoint(config.endpoint);
 
   return {

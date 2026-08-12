@@ -87,15 +87,27 @@ function parseVideoMetadata(stdout: string): VideoMetadata {
 }
 
 function validateFilmstripOptions(options: FilmstripOptions): void {
-  if (!Number.isInteger(options.width) || options.width <= 1 || !Number.isInteger(options.height) || options.height <= 1) {
+  if (
+    !Number.isInteger(options.width) ||
+    options.width <= 1 ||
+    !Number.isInteger(options.height) ||
+    options.height <= 1
+  ) {
     throw mediaProcessFailed();
   }
-  if (options.width % 2 !== 0 || options.height % 2 !== 0 || options.timestamps.some((value) => !Number.isFinite(value) || value < 0)) {
+  if (
+    options.width % 2 !== 0 ||
+    options.height % 2 !== 0 ||
+    options.timestamps.some((value) => !Number.isFinite(value) || value < 0)
+  ) {
     throw mediaProcessFailed();
   }
 }
 
-export async function probeVideo(path: string, options: MediaProcessOptions = {}): Promise<VideoMetadata> {
+export async function probeVideo(
+  path: string,
+  options: MediaProcessOptions = {}
+): Promise<VideoMetadata> {
   const result = await runMediaTool(
     "ffprobe",
     [
@@ -164,5 +176,10 @@ export async function createFilmstrip(
     options
   );
 
-  return { outputPath, timestamps: options.timestamps, width: options.width, height: options.height };
+  return {
+    outputPath,
+    timestamps: options.timestamps,
+    width: options.width,
+    height: options.height
+  };
 }

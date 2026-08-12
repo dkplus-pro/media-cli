@@ -56,7 +56,11 @@ describe("dk-audio public APIs", () => {
       translator: {
         async translate(task) {
           assert.equal(task.targetLanguage, "zh");
-          return { ...task.transcript, language: "zh", segments: [{ ...task.transcript.segments[0], text: "你好，世界。" }] };
+          return {
+            ...task.transcript,
+            language: "zh",
+            segments: [{ ...task.transcript.segments[0], text: "你好，世界。" }]
+          };
         }
       }
     });
@@ -64,7 +68,11 @@ describe("dk-audio public APIs", () => {
     assert.equal(result.language, "zh");
     assert.equal(result.segments[0].text, "你好，世界。");
     await assert.rejects(
-      () => translateTranscript({ ...transcript, segments: [{ ...transcript.segments[0], endMs: -1 }] }, { targetLanguage: "zh" }),
+      () =>
+        translateTranscript(
+          { ...transcript, segments: [{ ...transcript.segments[0], endMs: -1 }] },
+          { targetLanguage: "zh" }
+        ),
       (error) => error instanceof CliError && error.code === "INVALID_TRANSCRIPT"
     );
   });

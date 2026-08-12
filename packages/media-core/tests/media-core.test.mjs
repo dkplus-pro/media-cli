@@ -104,7 +104,9 @@ describe("media adapters", () => {
       });
 
       const expectedFrames = await Promise.all(
-        timestamps.map((timestamp) => frameAtTimestamp(filmstripFixture, timestamp, 160, 90, directory))
+        timestamps.map((timestamp) =>
+          frameAtTimestamp(filmstripFixture, timestamp, 160, 90, directory)
+        )
       );
       const quadrants = await Promise.all([
         filmstripQuadrant(outputPath, 0, 0, 160, 90),
@@ -113,7 +115,11 @@ describe("media adapters", () => {
         filmstripQuadrant(outputPath, 160, 90, 160, 90)
       ]);
 
-      assert.equal(new Set(expectedFrames.map((frame) => createHash("sha256").update(frame).digest("hex"))).size, 4);
+      assert.equal(
+        new Set(expectedFrames.map((frame) => createHash("sha256").update(frame).digest("hex")))
+          .size,
+        4
+      );
       assert.deepEqual(quadrants, expectedFrames);
     });
   });
@@ -147,7 +153,11 @@ describe("media adapters", () => {
         (error) => error instanceof CliError && error.code === "OUTPUT_EXISTS"
       );
       await assert.rejects(
-        () => watermarkImage(imageFixture, join(dirname(imageFixture), ".", "sample.png"), { text: "dkplus", force: true }),
+        () =>
+          watermarkImage(imageFixture, join(dirname(imageFixture), ".", "sample.png"), {
+            text: "dkplus",
+            force: true
+          }),
         (error) => error instanceof CliError && error.code === "INVALID_ARGUMENT"
       );
     });

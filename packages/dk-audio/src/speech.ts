@@ -1,5 +1,10 @@
 import { AIProviderError, type AIProvider } from "@dkplus/ai-core";
-import { CliError, parseTranscript, type SourceFingerprint, type Transcript } from "@dkplus/contracts";
+import {
+  CliError,
+  parseTranscript,
+  type SourceFingerprint,
+  type Transcript
+} from "@dkplus/contracts";
 import { fingerprintFile } from "@dkplus/media-core";
 import { z } from "zod";
 
@@ -96,7 +101,10 @@ function providerFailure(error: unknown): CliError {
   });
 }
 
-export async function transcribeAudio(audioPath: string, options: TranscribeAudioOptions = {}): Promise<Transcript> {
+export async function transcribeAudio(
+  audioPath: string,
+  options: TranscribeAudioOptions = {}
+): Promise<Transcript> {
   if (options.transcriber === undefined) {
     throw new CliError({
       code: "AUDIO_TRANSCRIBER_UNAVAILABLE",

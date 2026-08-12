@@ -55,7 +55,10 @@ async function resolvesToSameFile(inputPath: string, outputPath: string): Promis
   }
 
   try {
-    const [resolvedInputPath, resolvedOutputPath] = await Promise.all([realpath(inputPath), realpath(outputPath)]);
+    const [resolvedInputPath, resolvedOutputPath] = await Promise.all([
+      realpath(inputPath),
+      realpath(outputPath)
+    ]);
     return resolvedInputPath === resolvedOutputPath;
   } catch {
     return false;
@@ -92,7 +95,10 @@ export async function watermarkImage(
     const overlay = Buffer.from(
       `<svg width="${metadata.width}" height="${metadata.height}" xmlns="http://www.w3.org/2000/svg"><text x="${metadata.width - Math.round(fontSize / 2)}" y="${metadata.height - Math.round(fontSize / 2)}" text-anchor="end" font-family="sans-serif" font-size="${fontSize}" font-weight="bold" fill="white" stroke="black" stroke-width="1" opacity="0.8">${escapeXml(options.text)}</text></svg>`
     );
-    await sharp(inputPath).composite([{ input: overlay }]).removeAlpha().toFile(outputPath);
+    await sharp(inputPath)
+      .composite([{ input: overlay }])
+      .removeAlpha()
+      .toFile(outputPath);
   } catch (error) {
     if (error instanceof CliError) {
       throw error;

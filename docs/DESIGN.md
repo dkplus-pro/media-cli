@@ -1,8 +1,8 @@
 ---
-title: 'Monorepo 的 CLI 实现方案：从领域包到可编排媒体能力'
+title: "Monorepo 的 CLI 实现方案：从领域包到可编排媒体能力"
 date: 2026-08-12
-tags: ['Monorepo', 'CLI', 'npm', '音视频处理', '架构设计']
-description: '设计一套可独立发布、可组合、可测试并支持 n8n、Node、Python 和 AI Agent 调用的媒体处理 CLI Monorepo 方案'
+tags: ["Monorepo", "CLI", "npm", "音视频处理", "架构设计"]
+description: "设计一套可独立发布、可组合、可测试并支持 n8n、Node、Python 和 AI Agent 调用的媒体处理 CLI Monorepo 方案"
 draft: false
 ---
 
@@ -190,11 +190,11 @@ apps/
 
 只负责：
 
-* Web 平台
-* Demo
-* 实际业务系统
-* CLI 能力演示
-* 集成验证
+- Web 平台
+- Demo
+- 实际业务系统
+- CLI 能力演示
+- 集成验证
 
 而：
 
@@ -204,11 +204,11 @@ packages/
 
 负责：
 
-* 可以发布的 CLI
-* CLI 共用能力
-* Contract
-* AI Provider
-* 测试工具
+- 可以发布的 CLI
+- CLI 共用能力
+- Contract
+- AI Provider
+- 测试工具
 
 ---
 
@@ -444,7 +444,6 @@ image analyze
 ```yaml
 ai:
   profiles:
-
     qwen-omni:
       mode: api
       provider: openai-compatible
@@ -480,7 +479,6 @@ ai:
 
 ```yaml
 features:
-
   audio.speech.transcribe:
     profile: local-whisper
 
@@ -1510,9 +1508,7 @@ Food/
 
 ```ts
 interface AIProvider {
-  execute<TInput, TOutput>(
-    task: AITask<TInput, TOutput>
-  ): Promise<TOutput>
+  execute<TInput, TOutput>(task: AITask<TInput, TOutput>): Promise<TOutput>;
 }
 ```
 
@@ -1970,11 +1966,7 @@ commands.json
       "input": {
         "type": "audio-file"
       },
-      "outputs": [
-        "json",
-        "srt",
-        "vtt"
-      ]
+      "outputs": ["json", "srt", "vtt"]
     }
   ]
 }
@@ -2129,13 +2121,7 @@ npm pack
   "bin": {
     "dk-audio": "./dist/cli.js"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "README.zh-CN.md",
-    "docs",
-    "commands.json"
-  ],
+  "files": ["dist", "README.md", "README.zh-CN.md", "docs", "commands.json"],
   "publishConfig": {
     "access": "public"
   }
@@ -2710,7 +2696,7 @@ serialize
 所以 Node 项目还可以直接：
 
 ```ts
-import { createFilmstrip } from '@dkplus/dk-video'
+import { createFilmstrip } from "@dkplus/dk-video";
 ```
 
 而 Python、n8n 则：

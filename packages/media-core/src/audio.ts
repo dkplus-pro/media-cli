@@ -44,7 +44,12 @@ function parseAudioMetadata(stdout: string): AudioMetadata {
   const durationSeconds = finiteNumber(payload.format?.duration);
   const sampleRate = finiteNumber(stream?.sample_rate);
   const channels = finiteNumber(stream?.channels);
-  if (!stream?.codec_name || durationSeconds === undefined || sampleRate === undefined || channels === undefined) {
+  if (
+    !stream?.codec_name ||
+    durationSeconds === undefined ||
+    sampleRate === undefined ||
+    channels === undefined
+  ) {
     throw mediaProcessFailed();
   }
 
@@ -58,7 +63,10 @@ function parseAudioMetadata(stdout: string): AudioMetadata {
   };
 }
 
-export async function probeAudio(path: string, options: MediaProcessOptions = {}): Promise<AudioMetadata> {
+export async function probeAudio(
+  path: string,
+  options: MediaProcessOptions = {}
+): Promise<AudioMetadata> {
   const result = await runMediaTool(
     "ffprobe",
     [

@@ -11,7 +11,9 @@ export interface FeatureProfile {
 }
 
 function matchesFeature(pattern: string, feature: string): boolean {
-  return pattern === feature || (pattern.endsWith(".*") && feature.startsWith(pattern.slice(0, -1)));
+  return (
+    pattern === feature || (pattern.endsWith(".*") && feature.startsWith(pattern.slice(0, -1)))
+  );
 }
 
 export class FeatureResolver {
@@ -22,9 +24,14 @@ export class FeatureResolver {
   }
 
   resolve(feature: string): FeatureProfile {
-    const profile = this.profiles.find((candidate) => candidate.features.some((pattern) => matchesFeature(pattern, feature)));
+    const profile = this.profiles.find((candidate) =>
+      candidate.features.some((pattern) => matchesFeature(pattern, feature))
+    );
     if (!profile) {
-      throw new AIProviderError("AI_FEATURE_UNAVAILABLE", `No AI profile is configured for feature: ${feature}.`);
+      throw new AIProviderError(
+        "AI_FEATURE_UNAVAILABLE",
+        `No AI profile is configured for feature: ${feature}.`
+      );
     }
 
     return profile;

@@ -62,7 +62,10 @@ function providerFailure(error: unknown): CliError {
 }
 
 export async function readAudioMetadata(audioPath: string): Promise<MusicMetadata> {
-  const [sourceFingerprint, metadata] = await Promise.all([fingerprintFile(audioPath), probeAudio(audioPath)]);
+  const [sourceFingerprint, metadata] = await Promise.all([
+    fingerprintFile(audioPath),
+    probeAudio(audioPath)
+  ]);
   return {
     kind: "music-metadata",
     schemaVersion: "1.0",
@@ -101,7 +104,10 @@ export async function analyzeMusicEmotion(
   }
 }
 
-export async function analyzeMusic(audioPath: string, options: AnalyzeMusicOptions): Promise<MusicAnalysis> {
+export async function analyzeMusic(
+  audioPath: string,
+  options: AnalyzeMusicOptions
+): Promise<MusicAnalysis> {
   const metadata = await readAudioMetadata(audioPath);
   const emotion = await analyzeMusicEmotion(audioPath, { provider: options.provider, metadata });
   return { metadata, emotion };
