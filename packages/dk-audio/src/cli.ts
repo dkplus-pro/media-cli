@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 
 import type { AIProvider } from "@dkplus/ai-core";
 import {
@@ -32,12 +34,14 @@ import {
   type AudioTranscriber,
   type TranscriptTranslator
 } from "./index.js";
+import { loadConfiguredAudioProvider, type AudioProviderFactory } from "./ai-config.js";
 import { translateAudio, translateTranscript } from "./speech.js";
 
 const VERSION = "0.1.0";
 
 export interface AudioCliDependencies {
   provider?: AIProvider;
+  providerFactory?: AudioProviderFactory;
   transcriber?: AudioTranscriber;
   translator?: TranscriptTranslator;
   stdout?: OutputWriter;
@@ -67,7 +71,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseStringField(value: unknown, field: string): string {
   if (!isRecord(value) || typeof value[field] !== "string" || value[field].trim().length === 0) {
-    throw new CliError({ code: "INVALID_COMMAND_INPUT", message: `${field} must be a non-empty string.` });
+    throw new CliError({
+      code: "INVALID_COMMAND_INPUT",
+      message: `${field} must be a non-empty string.`
+    });
   }
   return value[field];
 }
@@ -122,7 +129,9 @@ function providerOrError(provider: AIProvider | undefined): AIProvider {
 async function readCanonicalTranscript(input: string) {
   let raw: unknown;
   try {
-    raw = input.trim().startsWith("{") ? JSON.parse(input) : JSON.parse(await readFile(input, "utf8"));
+    raw = input.trim().startsWith("{")
+      ? JSON.parse(input)
+      : JSON.parse(await readFile(input, "utf8"));
   } catch {
     throw new CliError({ code: "INVALID_TRANSCRIPT", message: "Transcript data is invalid." });
   }
@@ -139,15 +148,28 @@ function createCommands(dependencies: AudioCliDependencies) {
     description: "Transcribe audio through a configured raw-audio adapter.",
     version: VERSION,
     inputSchema: audioPathSchema,
-    outputSchema: outputSchema(["kind", "schemaVersion", "sourceFingerprint", "language", "segments"]),
-    execute: ({ audioPath }) => transcribeAudio(audioPath, { transcriber: dependencies.transcriber })
+    outputSchema: outputSchema([
+      "kind",
+      "schemaVersion",
+      "sourceFingerprint",
+      "language",
+      "segments"
+    ]),
+    execute: ({ audioPath }) =>
+      transcribeAudio(audioPath, { transcriber: dependencies.transcriber })
   };
   const translate: CommandDefinition<TranslateInput, unknown> = {
     name: "speech translate",
     description: "Translate a canonical transcript or audio file through configured adapters.",
     version: VERSION,
     inputSchema: translateInputSchema,
-    outputSchema: outputSchema(["kind", "schemaVersion", "sourceFingerprint", "language", "segments"]),
+    outputSchema: outputSchema([
+      "kind",
+      "schemaVersion",
+      "sourceFingerprint",
+      "language",
+      "segments"
+    ]),
     execute: async ({ transcriptInput, targetLanguage }) => {
       if (isCanonicalTranscriptInput(transcriptInput)) {
         return translateTranscript(await readCanonicalTranscript(transcriptInput), {
@@ -167,7 +189,14 @@ function createCommands(dependencies: AudioCliDependencies) {
     description: "Summarize a canonical transcript with a feature-routed AI provider.",
     version: VERSION,
     inputSchema: transcriptInputSchema,
-    outputSchema: outputSchema(["summary", "topics", "keyPoints", "participants", "decisions", "questions"]),
+    outputSchema: outputSchema([
+      "summary",
+      "topics",
+      "keyPoints",
+      "participants",
+      "decisions",
+      "questions"
+    ]),
     execute: async ({ transcriptInput }) =>
       summarizeTranscript(await readCanonicalTranscript(transcriptInput), {
         provider: providerOrError(dependencies.provider)
@@ -178,7 +207,13 @@ function createCommands(dependencies: AudioCliDependencies) {
     description: "Read deterministic local audio metadata.",
     version: VERSION,
     inputSchema: audioPathSchema,
-    outputSchema: outputSchema(["kind", "schemaVersion", "sourceFingerprint", "durationMs", "codec"]),
+    outputSchema: outputSchema([
+      "kind",
+      "schemaVersion",
+      "sourceFingerprint",
+      "durationMs",
+      "codec"
+    ]),
     execute: ({ audioPath }) => readAudioMetadata(audioPath)
   };
   const emotion: CommandDefinition<AudioPathInput, unknown> = {
@@ -196,7 +231,8 @@ function createCommands(dependencies: AudioCliDependencies) {
     version: VERSION,
     inputSchema: audioPathSchema,
     outputSchema: outputSchema(["metadata", "emotion"]),
-    execute: ({ audioPath }) => analyzeMusic(audioPath, { provider: providerOrError(dependencies.provider) })
+    execute: ({ audioPath }) =>
+      analyzeMusic(audioPath, { provider: providerOrError(dependencies.provider) })
   };
 
   return { transcribe, translate, summarize, metadata, emotion, analyze };
@@ -206,9 +242,11 @@ function helpText(command?: { name: string; description: string }): string {
   if (command !== undefined) {
     return `${command.name}: ${command.description}\n${baseOptions.map((option) => option.flag).join(", ")}, --schema\n`;
   }
-  return "Usage: dk-audio <speech|music> <command> [input] [options]\n\n" +
+  return (
+    "Usage: dk-audio <speech|music> <command> [input] [options]\n\n" +
     "Commands: speech transcribe, speech translate, speech summarize, music metadata, music emotion, music analyze\n" +
-    `${baseOptions.map((option) => option.flag).join(", ")}, --schema\n`;
+    `${baseOptions.map((option) => option.flag).join(", ")}, --schema\n`
+  );
 }
 
 function writeHelp(writer: OutputWriter, command?: { name: string; description: string }): void {
@@ -236,7 +274,10 @@ function optionValue(argumentsList: readonly string[], name: string): string | u
   return value;
 }
 
-function positionalInput(argumentsList: readonly string[], optionNames: readonly string[] = []): string {
+function positionalInput(
+  argumentsList: readonly string[],
+  optionNames: readonly string[] = []
+): string {
   const values = argumentsList.filter((argument, index) => {
     if (optionNames.some((option) => argument === option || argument.startsWith(`${option}=`))) {
       return false;
@@ -245,7 +286,10 @@ function positionalInput(argumentsList: readonly string[], optionNames: readonly
   });
   const input = values[0];
   if (input === undefined || values.length !== 1) {
-    throw new CliError({ code: "INVALID_ARGUMENT", message: "This command requires exactly one input." });
+    throw new CliError({
+      code: "INVALID_ARGUMENT",
+      message: "This command requires exactly one input."
+    });
   }
   return input;
 }
@@ -254,7 +298,10 @@ function commandInput(command: string, argumentsList: readonly string[]): unknow
   if (command === "speech translate") {
     const targetLanguage = optionValue(argumentsList, "--to");
     if (targetLanguage === undefined) {
-      throw new CliError({ code: "INVALID_ARGUMENT", message: "speech translate requires --to <language>." });
+      throw new CliError({
+        code: "INVALID_ARGUMENT",
+        message: "speech translate requires --to <language>."
+      });
     }
     return { transcriptInput: positionalInput(argumentsList, ["--to"]), targetLanguage };
   }
@@ -301,14 +348,24 @@ async function executeCommand(
   if (name === commands.analyze.name) {
     return runCommand(commands.analyze, input);
   }
-  return failedResult(name, new CliError({ code: "UNKNOWN_COMMAND", message: "Unknown audio command." }));
+  return failedResult(
+    name,
+    new CliError({ code: "UNKNOWN_COMMAND", message: "Unknown audio command." })
+  );
 }
 
-function parseSchemaFlag(argumentsList: readonly string[]): { schema: boolean; argumentsList: string[] } {
+function parseSchemaFlag(argumentsList: readonly string[]): {
+  schema: boolean;
+  argumentsList: string[];
+} {
   return {
     schema: argumentsList.includes("--schema"),
     argumentsList: argumentsList.filter((argument) => argument !== "--schema")
   };
+}
+
+function requiresAiProvider(name: string): boolean {
+  return name === "speech summarize" || name === "music emotion" || name === "music analyze";
 }
 
 export async function runAudioCli(
@@ -328,7 +385,10 @@ export async function runAudioCli(
   const commands = createCommands(dependencies);
   const [namespace, action, ...commandArguments] = parsed.positionals;
   if (parsed.options.help) {
-    const command = namespace !== undefined && action !== undefined ? namedCommand(`${namespace} ${action}`, commands) : undefined;
+    const command =
+      namespace !== undefined && action !== undefined
+        ? namedCommand(`${namespace} ${action}`, commands)
+        : undefined;
     if (parsed.options.json || parsed.options.jsonl) {
       emitResult(
         createSuccessResult(
@@ -365,11 +425,15 @@ export async function runAudioCli(
     return { exitCode: 0 };
   }
 
-  const name = namespace === undefined || action === undefined ? "dk-audio" : `${namespace} ${action}`;
+  const name =
+    namespace === undefined || action === undefined ? "dk-audio" : `${namespace} ${action}`;
   const command = namedCommand(name, commands);
   if (command === undefined) {
     emitResult(
-      failedResult(name, new CliError({ code: "UNKNOWN_COMMAND", message: "Unknown audio command." })),
+      failedResult(
+        name,
+        new CliError({ code: "UNKNOWN_COMMAND", message: "Unknown audio command." })
+      ),
       { mode: parsed.options.jsonl ? "jsonl" : "json", stdout }
     );
     return { exitCode: 1 };
@@ -391,9 +455,16 @@ export async function runAudioCli(
 
   let result: CliResult<unknown>;
   try {
+    const provider =
+      dependencies.provider === undefined &&
+      parsed.options.config !== undefined &&
+      requiresAiProvider(name)
+        ? await loadConfiguredAudioProvider(parsed.options.config, dependencies.providerFactory)
+        : dependencies.provider;
+    const configuredCommands = createCommands({ ...dependencies, provider });
     const input = commandInput(name, commandArguments);
     emitProgress({ stage: "execute" }, { mode: parsed.options.jsonl ? "jsonl" : "json", stdout });
-    result = await executeCommand(name, input, commands);
+    result = await executeCommand(name, input, configuredCommands);
   } catch (error) {
     result = failedResult(name, error);
   }
@@ -401,7 +472,10 @@ export async function runAudioCli(
   return { exitCode: result.success ? 0 : 1 };
 }
 
-if (process.argv[1] !== undefined && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+if (
+  process.argv[1] !== undefined &&
+  fileURLToPath(import.meta.url) === realpathSync(process.argv[1])
+) {
   void runAudioCli(process.argv.slice(2)).then(({ exitCode }) => {
     process.exitCode = exitCode;
   });

@@ -20,6 +20,8 @@
     "prepare": "husky",
     "test": "pnpm run test:unit && turbo run test && pnpm run test:e2e",
     "test:e2e": "playwright test",
+    "test:live": "pnpm --filter @dkplus/dk-audio... --filter @dkplus/dk-image... --filter @dkplus/dk-video... run build && node --test tests/live/*.test.mjs",
+    "test:smoke": "pnpm --filter @dkplus/dk-audio... --filter @dkplus/dk-image... --filter @dkplus/dk-video... run build && node --test tests/smoke/*.test.mjs",
     "test:unit": "jest --config jest.config.cjs",
     "typecheck": "turbo run typecheck",
     "verify": "bash scripts/verify.sh"

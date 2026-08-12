@@ -24,14 +24,14 @@ Use `dk-audio speech summarize --schema --json` to inspect a command contract.
 
 ## Commands
 
-| Command | Input | Output |
-| --- | --- | --- |
-| `speech transcribe` | audio file | canonical transcript |
-| `speech translate --to <language>` | canonical transcript or audio file | canonical transcript |
-| `speech summarize` | canonical transcript | typed summary |
-| `music metadata` | audio file | deterministic metadata |
-| `music emotion` | audio file | typed emotion |
-| `music analyze` | audio file | exactly `{ metadata, emotion }` |
+| Command                            | Input                              | Output                          |
+| ---------------------------------- | ---------------------------------- | ------------------------------- |
+| `speech transcribe`                | audio file                         | canonical transcript            |
+| `speech translate --to <language>` | canonical transcript or audio file | canonical transcript            |
+| `speech summarize`                 | canonical transcript               | typed summary                   |
+| `music metadata`                   | audio file                         | deterministic metadata          |
+| `music emotion`                    | audio file                         | typed emotion                   |
+| `music analyze`                    | audio file                         | exactly `{ metadata, emotion }` |
 
 The machine-readable command list is [commands.json](./commands.json).
 
@@ -51,6 +51,30 @@ sends raw audio to a Qwen-compatible Chat endpoint.
 send feature-routed tasks using `audio.speech.summarize` and
 `audio.music.emotion`, respectively. The domain package does not read API keys,
 provider URLs, or environment credentials.
+
+For `speech summarize`, `music emotion`, and `music analyze`, the CLI can load
+an explicit local profile with `--config`; it never reads environment secrets.
+Profiles route only those feature IDs through `@dkplus/ai-core`:
+
+```json
+{
+  "profiles": [
+    {
+      "id": "audio-analysis",
+      "provider": "openai-compatible",
+      "features": ["audio.speech.summarize", "audio.music.*"],
+      "config": {
+        "baseUrl": "https://provider.example/v1",
+        "apiKey": "injected-by-your-config-workflow",
+        "model": "provider-model"
+      }
+    }
+  ]
+}
+```
+
+Raw transcription and direct audio translation still require injected adapters;
+the profile is deliberately not used for those commands.
 
 ```ts
 import { createMockProvider } from "@dkplus/ai-core";

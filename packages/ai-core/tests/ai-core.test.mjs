@@ -61,6 +61,24 @@ describe("provider profile routing", () => {
       model: "qwen-alias-model"
     });
   });
+
+  it("accepts Azure endpoint and API version aliases from a passed environment map", () => {
+    const profiles = createProviderProfiles({
+      AZURE_OPENAI_BASE_URL: "https://example.openai.azure.com/openai/v1",
+      AZURE_OPENAI_KEY: "azure-alias-key",
+      AZURE_OPENAI_MODEL: "gpt-4o-alias-deployment",
+      AZURE_OPENAI_VERSION: "2025-01-01-preview",
+      QWEN_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      QWEN_API_KEY: "qwen-alias-key"
+    });
+
+    assert.deepEqual(profiles.azure, {
+      endpoint: "https://example.openai.azure.com/openai/v1",
+      apiKey: "azure-alias-key",
+      deployment: "gpt-4o-alias-deployment",
+      apiVersion: "2025-01-01-preview"
+    });
+  });
 });
 
 describe("Azure OpenAI provider", () => {

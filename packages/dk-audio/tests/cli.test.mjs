@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
@@ -19,7 +21,23 @@ const transcript = {
 function writers() {
   const stdout = [];
   const stderr = [];
-  return { stdout, stderr, writers: { stdout: { write: (line) => stdout.push(line) }, stderr: { write: (line) => stderr.push(line) } } };
+  return {
+    stdout,
+    stderr,
+    writers: {
+      stdout: { write: (line) => stdout.push(line) },
+      stderr: { write: (line) => stderr.push(line) }
+    }
+  };
+}
+
+async function withTemporaryDirectory(work) {
+  const directory = await mkdtemp(join(tmpdir(), "dk-audio-cli-"));
+  try {
+    return await work(directory);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 }
 
 describe("dk-audio CLI", () => {
@@ -33,7 +51,11 @@ describe("dk-audio CLI", () => {
     assert.match(version.stdout.join(""), /0\.1\.0/u);
 
     const schema = writers();
-    assert.equal((await runAudioCli(["speech", "summarize", "--schema", "--json"], { ...schema.writers })).exitCode, 0);
+    assert.equal(
+      (await runAudioCli(["speech", "summarize", "--schema", "--json"], { ...schema.writers }))
+        .exitCode,
+      0
+    );
     const envelope = JSON.parse(schema.stdout.join(""));
     assert.equal(envelope.success, true);
     assert.equal(envelope.data.name, "speech summarize");
@@ -77,9 +99,82 @@ describe("dk-audio CLI", () => {
     assert.equal(JSON.parse(output.stdout[0]).success, true);
   });
 
+  it("routes summary and music AI commands through an explicit local config profile", async () => {
+    await withTemporaryDirectory(async (directory) => {
+      const configPath = join(directory, "audio-ai.json");
+      await writeFile(
+        configPath,
+        JSON.stringify({
+          profiles: [
+            {
+              id: "audio-analysis",
+              provider: "openai-compatible",
+              features: ["audio.speech.summarize", "audio.music.*"],
+              config: {
+                baseUrl: "https://example.test/v1",
+                apiKey: "test-key",
+                model: "test-model"
+              }
+            }
+          ]
+        })
+      );
+      const features = [];
+      const providerFactory = (profile) => {
+        assert.equal(profile.id, "audio-analysis");
+        return createMockProvider((task) => {
+          features.push(task.feature);
+          if (task.feature === "audio.speech.summarize") {
+            return {
+              summary: "Greeting.",
+              topics: [],
+              keyPoints: [],
+              participants: [],
+              decisions: [],
+              questions: []
+            };
+          }
+          if (task.feature === "audio.music.emotion") {
+            return {
+              primaryEmotion: "calm",
+              secondaryEmotions: [],
+              valence: 0.5,
+              arousal: 0.2,
+              tension: 0.1
+            };
+          }
+          throw new Error(`Unexpected feature: ${task.feature}`);
+        });
+      };
+
+      for (const command of [
+        ["speech", "summarize", JSON.stringify(transcript)],
+        ["music", "emotion", fixturePath("short-audio.wav")],
+        ["music", "analyze", fixturePath("short-audio.wav")]
+      ]) {
+        const output = writers();
+        const result = await runAudioCli([...command, "--config", configPath, "--json"], {
+          ...output.writers,
+          providerFactory
+        });
+        assert.equal(result.exitCode, 0, command.join(" "));
+        assert.equal(JSON.parse(output.stdout.join("")).success, true);
+      }
+
+      assert.deepEqual(features, [
+        "audio.speech.summarize",
+        "audio.music.emotion",
+        "audio.music.emotion"
+      ]);
+    });
+  });
+
   it("returns a non-zero typed error envelope for malformed transcript input", async () => {
     const output = writers();
-    const result = await runAudioCli(["speech", "summarize", "{bad-json", "--json"], output.writers);
+    const result = await runAudioCli(
+      ["speech", "summarize", "{bad-json", "--json"],
+      output.writers
+    );
 
     assert.equal(result.exitCode, 1);
     const envelope = JSON.parse(output.stdout.join(""));
@@ -88,7 +183,10 @@ describe("dk-audio CLI", () => {
 
   it("returns a non-zero typed configuration error for raw audio without an adapter", async () => {
     const output = writers();
-    const result = await runAudioCli(["speech", "transcribe", "clip.wav", "--json"], output.writers);
+    const result = await runAudioCli(
+      ["speech", "transcribe", "clip.wav", "--json"],
+      output.writers
+    );
 
     assert.equal(result.exitCode, 1);
     assert.equal(JSON.parse(output.stdout.join("")).error.code, "AUDIO_TRANSCRIBER_UNAVAILABLE");
@@ -126,16 +224,13 @@ describe("dk-audio CLI", () => {
     const manifestPath = fileURLToPath(new URL("../commands.json", import.meta.url));
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 
-    assert.deepEqual(
-      manifest.commands.map((command) => command.command).sort(),
-      [
-        "music analyze",
-        "music emotion",
-        "music metadata",
-        "speech summarize",
-        "speech transcribe",
-        "speech translate"
-      ]
-    );
+    assert.deepEqual(manifest.commands.map((command) => command.command).sort(), [
+      "music analyze",
+      "music emotion",
+      "music metadata",
+      "speech summarize",
+      "speech transcribe",
+      "speech translate"
+    ]);
   });
 });

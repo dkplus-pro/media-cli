@@ -23,14 +23,14 @@ dk-audio speech translate recording.wav --to zh --json
 
 ## 命令
 
-| 命令 | 输入 | 输出 |
-| --- | --- | --- |
-| `speech transcribe` | 音频文件 | 规范 Transcript |
-| `speech translate --to <language>` | 规范 Transcript 或音频文件 | 规范 Transcript |
-| `speech summarize` | 规范 Transcript | 类型化总结 |
-| `music metadata` | 音频文件 | 确定性元数据 |
-| `music emotion` | 音频文件 | 类型化情绪 |
-| `music analyze` | 音频文件 | 严格为 `{ metadata, emotion }` |
+| 命令                               | 输入                       | 输出                           |
+| ---------------------------------- | -------------------------- | ------------------------------ |
+| `speech transcribe`                | 音频文件                   | 规范 Transcript                |
+| `speech translate --to <language>` | 规范 Transcript 或音频文件 | 规范 Transcript                |
+| `speech summarize`                 | 规范 Transcript            | 类型化总结                     |
+| `music metadata`                   | 音频文件                   | 确定性元数据                   |
+| `music emotion`                    | 音频文件                   | 类型化情绪                     |
+| `music analyze`                    | 音频文件                   | 严格为 `{ metadata, emotion }` |
 
 机器可读清单见 [commands.json](./commands.json)。
 
@@ -48,6 +48,29 @@ Qwen 兼容 Chat 接口。
 `summarizeTranscript` 和 `analyzeMusicEmotion` 接收类型化 `AIProvider`，并分别
 使用 `audio.speech.summarize` 和 `audio.music.emotion` 路由。领域包不会读取
 API Key、提供商 URL 或环境凭据。
+
+对于 `speech summarize`、`music emotion` 和 `music analyze`，CLI 可通过
+`--config` 读取显式的本地 profile，且绝不读取环境中的密钥。profile 只会通过
+`@dkplus/ai-core` 路由这些功能标识：
+
+```json
+{
+  "profiles": [
+    {
+      "id": "audio-analysis",
+      "provider": "openai-compatible",
+      "features": ["audio.speech.summarize", "audio.music.*"],
+      "config": {
+        "baseUrl": "https://provider.example/v1",
+        "apiKey": "由你的配置流程注入",
+        "model": "provider-model"
+      }
+    }
+  ]
+}
+```
+
+原始音频转写和直接音频翻译仍必须注入适配器；profile 不会用于这些命令。
 
 `readAudioMetadata` 从本地 `ffprobe` 数据读取时长、编码、采样率、声道和比特率。
 本地不可用的音乐标签（`bpm`、`key`、`mode`、`loudness`）始终是 `null`，不会伪造。

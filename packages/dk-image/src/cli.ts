@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import type { AIProvider } from "@dkplus/ai-core";
 import {
   baseOptions,
@@ -441,7 +444,7 @@ export async function runImageCli(
 
 if (
   process.argv[1] !== undefined &&
-  import.meta.url === new URL(`file://${process.argv[1]}`).href
+  fileURLToPath(import.meta.url) === realpathSync(process.argv[1])
 ) {
   void runImageCli(process.argv.slice(2)).then(({ exitCode }) => {
     process.exitCode = exitCode;
