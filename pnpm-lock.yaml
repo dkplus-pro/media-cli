@@ -87,9 +87,6 @@ importers:
 
   packages/ai-core:
     dependencies:
-      '@dkplus/contracts':
-        specifier: workspace:*
-        version: link:../contracts
       zod:
         specifier: ^3.24.2
         version: 3.25.76

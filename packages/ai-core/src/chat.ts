@@ -25,7 +25,10 @@ function imageUrl(image: AIImage): string {
     return `data:${image.mimeType};base64,${image.base64Data}`;
   }
 
-  throw new AIProviderError("AI_PROVIDER_RESPONSE_INVALID", "Image input requires a data URL or base64 data.");
+  throw new AIProviderError(
+    "AI_PROVIDER_RESPONSE_INVALID",
+    "Image input requires a data URL or base64 data."
+  );
 }
 
 export function createChatBody<Result>(task: AITask<Result>, model: string): string {
@@ -37,7 +40,7 @@ export function createChatBody<Result>(task: AITask<Result>, model: string): str
     : task.prompt;
 
   return JSON.stringify({
-    model: task.model ?? model,
+    model,
     messages: [{ role: "user", content }],
     response_format: { type: "json_object" }
   });
@@ -57,29 +60,44 @@ export async function executeChat<Result>(
   }
 
   if (!response.ok) {
-    throw new AIProviderError("AI_PROVIDER_REQUEST_FAILED", `The AI provider request failed with status ${response.status}.`);
+    throw new AIProviderError(
+      "AI_PROVIDER_REQUEST_FAILED",
+      `The AI provider request failed with status ${response.status}.`
+    );
   }
 
   let payload: unknown;
   try {
     payload = await response.json();
   } catch {
-    throw new AIProviderError("AI_PROVIDER_RESPONSE_INVALID", "The AI provider returned an invalid response.");
+    throw new AIProviderError(
+      "AI_PROVIDER_RESPONSE_INVALID",
+      "The AI provider returned an invalid response."
+    );
   }
 
   const envelope = chatResponseSchema.safeParse(payload);
   if (!envelope.success) {
-    throw new AIProviderError("AI_PROVIDER_RESPONSE_INVALID", "The AI provider returned an invalid response.");
+    throw new AIProviderError(
+      "AI_PROVIDER_RESPONSE_INVALID",
+      "The AI provider returned an invalid response."
+    );
   }
 
   const choice = envelope.data.choices[0];
   if (!choice) {
-    throw new AIProviderError("AI_PROVIDER_RESPONSE_INVALID", "The AI provider returned an invalid response.");
+    throw new AIProviderError(
+      "AI_PROVIDER_RESPONSE_INVALID",
+      "The AI provider returned an invalid response."
+    );
   }
 
   try {
     return task.responseSchema.parse(JSON.parse(choice.message.content));
   } catch {
-    throw new AIProviderError("AI_PROVIDER_RESPONSE_INVALID", "The AI provider returned an invalid response.");
+    throw new AIProviderError(
+      "AI_PROVIDER_RESPONSE_INVALID",
+      "The AI provider returned an invalid response."
+    );
   }
 }

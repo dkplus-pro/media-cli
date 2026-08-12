@@ -10,7 +10,6 @@ export interface AITask<Result> {
   feature: string;
   prompt: string;
   images?: readonly AIImage[];
-  model?: string;
   responseSchema: z.ZodType<Result>;
 }
 

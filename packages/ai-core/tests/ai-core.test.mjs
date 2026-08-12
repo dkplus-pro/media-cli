@@ -24,15 +24,15 @@ function task(overrides = {}) {
 }
 
 describe("provider profile routing", () => {
-  it("resolves audio.speech.summarize to Azure from passed environment values", () => {
+  it("resolves audio.speech.summarize to Azure from canonical passed environment values", () => {
     const profiles = createProviderProfiles({
       AZURE_OPENAI_ENDPOINT: "https://example.openai.azure.com/openai/v1/",
-      AZURE_OPENAI_KEY: "azure-test-key",
-      AZURE_OPENAI_MODEL: "gpt-4o-deployment",
+      AZURE_OPENAI_API_KEY: "azure-test-key",
+      AZURE_OPENAI_DEPLOYMENT: "gpt-4o-deployment",
       AZURE_OPENAI_API_VERSION: "2024-10-21",
       DASHSCOPE_API_KEY: "qwen-test-key",
       DASHSCOPE_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-      DASHSCOPE_MODEL: "qwen-plus"
+      DASHSCOPE_MODEL: "qwen-profile-model"
     });
     const resolver = new FeatureResolver([
       { id: "azure", provider: "azure", features: ["audio.speech.*"], config: profiles.azure },
@@ -40,27 +40,47 @@ describe("provider profile routing", () => {
     ]);
 
     assert.equal(resolver.resolve("audio.speech.summarize").id, "azure");
+    assert.equal(profiles.azure.apiKey, "azure-test-key");
+    assert.equal(profiles.azure.deployment, "gpt-4o-deployment");
+    assert.equal(profiles.qwen.model, "qwen-profile-model");
+  });
+
+  it("accepts Qwen compatibility aliases from a passed environment map", () => {
+    const profiles = createProviderProfiles({
+      AZURE_OPENAI_ENDPOINT: "https://example.openai.azure.com",
+      AZURE_OPENAI_API_KEY: "azure-test-key",
+      AZURE_OPENAI_DEPLOYMENT: "gpt-4o-deployment",
+      QWEN_API_KEY: "qwen-alias-key",
+      QWEN_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      QWEN_MODEL: "qwen-alias-model"
+    });
+
+    assert.deepEqual(profiles.qwen, {
+      baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      apiKey: "qwen-alias-key",
+      model: "qwen-alias-model"
+    });
   });
 });
 
 describe("Azure OpenAI provider", () => {
   it("uses the deployment chat-completions endpoint, api-key auth, image content, and parsed output", async () => {
     const calls = [];
-    const provider = createAzureOpenAIProvider(
-      {
-        endpoint: "https://example.openai.azure.com/openai/v1/",
-        apiKey: "azure-test-key",
-        deployment: "gpt-4o-deployment",
-        apiVersion: "2024-10-21"
-      },
-      async (url, init) => {
-        calls.push({ url, init });
-        return new Response(
-          JSON.stringify({ choices: [{ message: { content: '{"summary":"Concise summary."}' } }] }),
-          { status: 200, headers: { "content-type": "application/json" } }
-        );
-      }
-    );
+    const profiles = createProviderProfiles({
+      AZURE_OPENAI_ENDPOINT: "https://example.openai.azure.com/openai/v1/",
+      AZURE_OPENAI_API_KEY: "azure-test-key",
+      AZURE_OPENAI_DEPLOYMENT: "gpt-4o-deployment",
+      AZURE_OPENAI_API_VERSION: "2024-10-21",
+      DASHSCOPE_API_KEY: "qwen-test-key",
+      DASHSCOPE_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    });
+    const provider = createAzureOpenAIProvider(profiles.azure, async (url, init) => {
+      calls.push({ url, init });
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: '{"summary":"Concise summary."}' } }] }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    });
 
     const result = await provider.execute(
       task({ images: [{ mimeType: "image/png", base64Data: "aW1hZ2U=" }] })
@@ -103,6 +123,38 @@ describe("Azure OpenAI provider", () => {
 });
 
 describe("OpenAI-compatible provider", () => {
+  it("uses the configured DashScope model instead of a task-level model", async () => {
+    const calls = [];
+    const profiles = createProviderProfiles({
+      AZURE_OPENAI_ENDPOINT: "https://example.openai.azure.com",
+      AZURE_OPENAI_API_KEY: "azure-test-key",
+      AZURE_OPENAI_DEPLOYMENT: "gpt-4o-deployment",
+      DASHSCOPE_API_KEY: "qwen-test-key",
+      DASHSCOPE_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1/",
+      DASHSCOPE_MODEL: "qwen-profile-model"
+    });
+    const provider = createOpenAICompatibleProvider(profiles.qwen, async (url, init) => {
+      calls.push({ url, init });
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: '{"summary":"Compatible result."}' } }] }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    });
+
+    assert.deepEqual(
+      await provider.execute(task({ feature: "music.emotion", model: "task-level-model" })),
+      {
+        summary: "Compatible result."
+      }
+    );
+    assert.equal(
+      calls[0].url,
+      "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    );
+    assert.equal(calls[0].init.headers.authorization, "Bearer qwen-test-key");
+    assert.equal(JSON.parse(calls[0].init.body).model, "qwen-profile-model");
+  });
+
   it("uses the compatible endpoint, Bearer auth, and a default model only when no model is configured", async () => {
     const calls = [];
     const provider = createOpenAICompatibleProvider(
@@ -110,7 +162,9 @@ describe("OpenAI-compatible provider", () => {
       async (url, init) => {
         calls.push({ url, init });
         return new Response(
-          JSON.stringify({ choices: [{ message: { content: '{"summary":"Compatible result."}' } }] }),
+          JSON.stringify({
+            choices: [{ message: { content: '{"summary":"Compatible result."}' } }]
+          }),
           { status: 200, headers: { "content-type": "application/json" } }
         );
       }
@@ -119,7 +173,10 @@ describe("OpenAI-compatible provider", () => {
     assert.deepEqual(await provider.execute(task({ feature: "music.emotion" })), {
       summary: "Compatible result."
     });
-    assert.equal(calls[0].url, "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions");
+    assert.equal(
+      calls[0].url,
+      "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+    );
     assert.equal(calls[0].init.headers.authorization, "Bearer qwen-test-key");
     assert.equal(JSON.parse(calls[0].init.body).model, "qwen-plus");
   });

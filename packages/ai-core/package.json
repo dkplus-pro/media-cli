@@ -21,7 +21,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@dkplus/contracts": "workspace:*",
     "zod": "^3.24.2"
   },
   "devDependencies": {
