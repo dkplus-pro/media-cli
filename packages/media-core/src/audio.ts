@@ -1,4 +1,4 @@
-import { assertOutputPathIsDistinct } from "./output.js";
+import { prepareMediaOutput, type MediaOutputOptions } from "./output.js";
 import { mediaProcessFailed, runMediaTool, type MediaProcessOptions } from "./process.js";
 
 export interface AudioMetadata {
@@ -9,9 +9,7 @@ export interface AudioMetadata {
   bitRate?: number;
 }
 
-export interface ExtractAudioOptions extends MediaProcessOptions {
-  force?: boolean;
-}
+export interface ExtractAudioOptions extends MediaProcessOptions, MediaOutputOptions {}
 
 interface ProbePayload {
   format?: { duration?: string; bit_rate?: string };
@@ -89,23 +87,27 @@ export async function extractAudio(
   outputPath: string,
   options: ExtractAudioOptions = {}
 ): Promise<void> {
-  await assertOutputPathIsDistinct(inputPath, outputPath, "Audio output");
-
-  await runMediaTool(
-    "ffmpeg",
-    [
-      options.force ? "-y" : "-n",
-      "-v",
-      "error",
-      "-i",
-      inputPath,
-      "-vn",
-      "-ac",
-      "1",
-      "-ar",
-      "44100",
-      outputPath
-    ],
-    options
-  );
+  const output = await prepareMediaOutput(inputPath, outputPath, "Audio output", options);
+  try {
+    await runMediaTool(
+      "ffmpeg",
+      [
+        "-n",
+        "-v",
+        "error",
+        "-i",
+        inputPath,
+        "-vn",
+        "-ac",
+        "1",
+        "-ar",
+        "44100",
+        output.temporaryPath
+      ],
+      options
+    );
+    await output.publish();
+  } finally {
+    await output.cleanup();
+  }
 }

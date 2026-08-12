@@ -1,5 +1,5 @@
+import { prepareMediaOutput, type MediaOutputOptions } from "./output.js";
 import { mediaProcessFailed, runMediaTool, type MediaProcessOptions } from "./process.js";
-import { assertOutputPathIsDistinct } from "./output.js";
 
 export interface VideoMetadata {
   durationMs: number;
@@ -10,7 +10,7 @@ export interface VideoMetadata {
   frameCount?: number;
 }
 
-export interface FilmstripOptions extends MediaProcessOptions {
+export interface FilmstripOptions extends MediaProcessOptions, MediaOutputOptions {
   timestamps: readonly [number, number, number, number];
   width: number;
   height: number;
@@ -133,7 +133,7 @@ export async function createFilmstrip(
   options: FilmstripOptions
 ): Promise<FilmstripResult> {
   validateFilmstripOptions(options);
-  await assertOutputPathIsDistinct(inputPath, outputPath, "Filmstrip output");
+  const output = await prepareMediaOutput(inputPath, outputPath, "Filmstrip output", options);
   const tileWidth = options.width / 2;
   const tileHeight = options.height / 2;
   const [first, second, third, fourth] = options.timestamps;
@@ -145,38 +145,43 @@ export async function createFilmstrip(
     `[a][b][c][d]xstack=inputs=4:layout=0_0|${tileWidth}_0|0_${tileHeight}|${tileWidth}_${tileHeight}`
   ].join(";");
 
-  await runMediaTool(
-    "ffmpeg",
-    [
-      "-y",
-      "-v",
-      "error",
-      "-ss",
-      String(first),
-      "-i",
-      inputPath,
-      "-ss",
-      String(second),
-      "-i",
-      inputPath,
-      "-ss",
-      String(third),
-      "-i",
-      inputPath,
-      "-ss",
-      String(fourth),
-      "-i",
-      inputPath,
-      "-filter_complex",
-      filter,
-      "-frames:v",
-      "1",
-      "-update",
-      "1",
-      outputPath
-    ],
-    options
-  );
+  try {
+    await runMediaTool(
+      "ffmpeg",
+      [
+        "-n",
+        "-v",
+        "error",
+        "-ss",
+        String(first),
+        "-i",
+        inputPath,
+        "-ss",
+        String(second),
+        "-i",
+        inputPath,
+        "-ss",
+        String(third),
+        "-i",
+        inputPath,
+        "-ss",
+        String(fourth),
+        "-i",
+        inputPath,
+        "-filter_complex",
+        filter,
+        "-frames:v",
+        "1",
+        "-update",
+        "1",
+        output.temporaryPath
+      ],
+      options
+    );
+    await output.publish();
+  } finally {
+    await output.cleanup();
+  }
 
   return {
     outputPath,

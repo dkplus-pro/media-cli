@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import { execFile as execFileCallback } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmod, copyFile, link, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  copyFile,
+  link,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { describe, it } from "node:test";
@@ -92,6 +102,29 @@ async function assertAliasDoesNotOverwriteSource(createOutputAlias, writeMedia) 
   });
 }
 
+async function assertAtomicPublicationDoesNotReplaceSource(writeMedia) {
+  await withTemporaryDirectory(async (directory) => {
+    const inputPath = join(directory, "source.mp4");
+    const outputPath = join(directory, "output.png");
+    await copyFile(videoFixture, inputPath);
+    const originalContents = await readFile(inputPath);
+
+    await writeMedia(inputPath, outputPath, {
+      force: true,
+      processRunner: async (_command, argumentsList) => {
+        const temporaryOutputPath = argumentsList.at(-1);
+        assert.equal(typeof temporaryOutputPath, "string");
+        await writeFile(temporaryOutputPath, "generated output");
+        await symlink(inputPath, outputPath);
+        return { exitCode: 0, stdout: "", stderr: "" };
+      }
+    });
+
+    assert.deepEqual(await readFile(inputPath), originalContents);
+    assert.equal(await readFile(outputPath, "utf8"), "generated output");
+  });
+}
+
 describe("media adapters", () => {
   it("normalizes metadata from short deterministic audio and video fixtures", async () => {
     const [audio, video] = await Promise.all([probeAudio(audioFixture), probeVideo(videoFixture)]);
@@ -121,20 +154,70 @@ describe("media adapters", () => {
   it("stops before FFmpeg when the audio output path cannot be inspected", async () => {
     let processWasStarted = false;
 
-    await assert.rejects(
-      () =>
-        extractAudio(videoFixture, "/dev/null/audio.wav", {
-          processRunner: async () => {
-            processWasStarted = true;
-            return { exitCode: 0, stdout: "", stderr: "" };
-          }
-        }),
-      (error) =>
-        error instanceof CliError &&
-        error.code === "INVALID_ARGUMENT" &&
-        !error.message.includes("/dev/null")
-    );
+    await withTemporaryDirectory(async (directory) => {
+      const outputPath = join(directory, "audio.wav");
+      await assert.rejects(
+        () =>
+          extractAudio(videoFixture, outputPath, {
+            pathInspector: async (path) => {
+              if (path !== videoFixture) {
+                throw Object.assign(new Error("denied"), { code: "EACCES" });
+              }
+              return stat(path);
+            },
+            processRunner: async () => {
+              processWasStarted = true;
+              return { exitCode: 0, stdout: "", stderr: "" };
+            }
+          }),
+        (error) =>
+          error instanceof CliError &&
+          error.code === "INVALID_ARGUMENT" &&
+          !error.message.includes(outputPath)
+      );
+    });
     assert.equal(processWasStarted, false);
+  });
+
+  it("refuses separate pre-existing media-core outputs unless force is explicit", async () => {
+    await withTemporaryDirectory(async (directory) => {
+      const audioOutputPath = join(directory, "audio.wav");
+      const filmstripOutputPath = join(directory, "filmstrip.png");
+      await Promise.all([
+        writeFile(audioOutputPath, "preserve audio output"),
+        writeFile(filmstripOutputPath, "preserve filmstrip output")
+      ]);
+
+      await assert.rejects(
+        () => extractAudio(videoFixture, audioOutputPath),
+        (error) => error instanceof CliError && error.code === "OUTPUT_EXISTS"
+      );
+      await assert.rejects(
+        () =>
+          createFilmstrip(videoFixture, filmstripOutputPath, {
+            timestamps: [0, 1, 2, 3],
+            width: 320,
+            height: 180
+          }),
+        (error) => error instanceof CliError && error.code === "OUTPUT_EXISTS"
+      );
+      assert.equal(await readFile(audioOutputPath, "utf8"), "preserve audio output");
+      assert.equal(await readFile(filmstripOutputPath, "utf8"), "preserve filmstrip output");
+    });
+  });
+
+  it("publishes force-enabled audio and filmstrip outputs without replacing a swapped source alias", async () => {
+    await assertAtomicPublicationDoesNotReplaceSource((inputPath, outputPath, options) =>
+      extractAudio(inputPath, outputPath, options)
+    );
+    await assertAtomicPublicationDoesNotReplaceSource((inputPath, outputPath, options) =>
+      createFilmstrip(inputPath, outputPath, {
+        timestamps: [0, 1, 2, 3],
+        width: 320,
+        height: 180,
+        ...options
+      })
+    );
   });
 
   it("rejects force-enabled extract-audio outputs that alias the input without altering the source", async () => {

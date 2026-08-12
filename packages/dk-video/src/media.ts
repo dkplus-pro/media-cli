@@ -1,5 +1,4 @@
-import { constants } from "node:fs";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 
@@ -105,22 +104,6 @@ export interface ExtractVideoSubtitlesOptions {
   language?: string;
 }
 
-async function outputExists(path: string): Promise<boolean> {
-  try {
-    await access(path, constants.F_OK);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function outputExistsError(): CliError {
-  return new CliError({
-    code: "OUTPUT_EXISTS",
-    message: "Refusing to overwrite an existing output file."
-  });
-}
-
 function videoProbeArtifact(
   sourceFingerprint: SourceFingerprint,
   metadata: VideoMetadata
@@ -206,17 +189,14 @@ export async function createVideoFilmstrip(
       message: "Filmstrip output must be a JPEG, PNG, or WebP image."
     });
   }
-  if (!options.force && (await outputExists(outputPath))) {
-    throw outputExistsError();
-  }
-  const sourceFingerprintPromise = fingerprintFile(videoPath);
   const result = await createFilmstrip(videoPath, outputPath, {
     timestamps: options.timestamps,
     width: options.width,
-    height: options.height
+    height: options.height,
+    force: options.force
   });
   const [sourceFingerprint, bytes, metadata] = await Promise.all([
-    sourceFingerprintPromise,
+    fingerprintFile(videoPath),
     readFile(outputPath),
     readImageMetadata(outputPath)
   ]);
