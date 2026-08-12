@@ -85,11 +85,33 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/cli-core:
+    dependencies:
+      '@dkplus/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+    devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@repo/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+
   packages/commitlint-config:
     dependencies:
       '@commitlint/config-conventional':
         specifier: 21.2.0
         version: 21.2.0
+
+  packages/contracts:
+    devDependencies:
+      '@repo/eslint-config':
+        specifier: workspace:*
+        version: link:../eslint-config
+      '@repo/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
 
   packages/eslint-config:
     dependencies:
