@@ -17,17 +17,16 @@ Tech Stack: Node.js 24, TypeScript, pnpm, Turborepo, Commander, Zod, native fetc
 - music analyze combines only metadata and emotion; image analyze excludes category; no image or video generation command is added.
 - FFmpeg and ffprobe are PATH prerequisites, overridable by configuration.
 
-### Task 1: Restore a green lint baseline
+### Task 1: Verify a clean toolchain baseline
 
-Files: modify package.json, packages/eslint-config/package.json, pnpm-lock.yaml; create tests/jest/toolchain.test.cjs.
+Files: no tracked source changes; use the existing package manifests and frozen lockfile.
 
-Produces: a working pnpm lint command before new production source lands.
+Produces: a reproducible healthy dependency installation before new production source lands.
 
-- [ ] Write a regression test that runs pnpm lint through execFileSync and expects exit 0.
-- [ ] Run pnpm test:unit with the new test; expect the existing Ajv/ESLint initialization failure.
-- [ ] Pin the root to an ESLint 9 release and change the shared config peer range to ^9.0.0; regenerate the lockfile.
-- [ ] Run focused regression and pnpm lint; both must exit 0.
-- [ ] Commit: fix: restore eslint lint baseline.
+- [x] Run pnpm install --frozen-lockfile in the isolated worktree.
+- [x] Run pnpm lint and pnpm test; both must exit 0 before feature work starts.
+- [ ] If a separate checkout fails with the same lockfile, remove and reinstall only that checkout's untracked node_modules; do not change dependency versions without a reproducing clean-install failure.
+- [x] Record the verified Node and pnpm versions in the implementation ledger.
 
 ### Task 2: Add contracts and CLI-core
 
