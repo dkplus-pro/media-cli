@@ -71,11 +71,11 @@ Files: create packages/dk-audio source for speech, music, cli, index; add comman
 
 Produces: speech transcribe, translate, summarize; music metadata, emotion, analyze. Exports: transcribeAudio, translateTranscript, summarizeTranscript, readAudioMetadata, analyzeMusicEmotion, analyzeMusic.
 
-- [ ] Test schemas and contracts for all six APIs, including that analyzeMusic returns only metadata and emotion.
-- [ ] Run dk-audio tests; expect missing exports.
-- [ ] Implement canonical transcript parsing and serialization, deterministic metadata with null unavailable music values, and feature-routed AI summary/emotion.
-- [ ] Add CLI tests for JSON, schema, malformed input, and non-zero failures.
-- [ ] Verify test, build, and pack dry-run; commit: feat: add audio cli phase one.
+- [x] Test schemas and contracts for all six APIs, including that analyzeMusic returns only metadata and emotion.
+- [x] Run dk-audio tests; expect missing exports.
+- [x] Implement canonical transcript parsing and serialization, deterministic metadata with null unavailable music values, and feature-routed AI summary/emotion.
+- [x] Add CLI tests for JSON, schema, malformed input, and non-zero failures.
+- [x] Verify test, build, and pack dry-run; commit: feat: add audio cli phase one.
 
 ### Task 6: Build dk-image without generation
 
@@ -83,11 +83,11 @@ Files: create packages/dk-image source for content, watermark, cli, index; add c
 
 Produces: content metadata, describe, keywords, ocr, score, analyze, watermark.
 
-- [ ] Test that analyzeImage combines exactly metadata, description, keywords, ocr, score and watermark rejects an existing output without force.
-- [ ] Run dk-image tests; expect missing exports.
-- [ ] Implement image asset loading, Feature IDs image.content.describe, keywords, ocr, score, score range validation [0, 10], and non-destructive output-only watermarking.
-- [ ] Verify every CLI command exposes schema and commands manifest does not expose generate.
-- [ ] Verify test, build, and pack dry-run; commit: feat: add image cli phase one.
+- [x] Test that analyzeImage combines exactly metadata, description, keywords, ocr, score and watermark rejects an existing output without force.
+- [x] Run dk-image tests; expect missing exports.
+- [x] Implement image asset loading, Feature IDs image.content.describe, keywords, ocr, score, score range validation [0, 10], and non-destructive output-only watermarking.
+- [x] Verify every CLI command exposes schema and commands manifest does not expose generate.
+- [x] Verify test, build, and pack dry-run; commit: feat: add image cli phase one.
 
 ### Task 7: Build dk-video
 
@@ -95,11 +95,11 @@ Files: create packages/dk-video source for media, content, analyze, cli, index; 
 
 Produces: probe, audio, filmstrip, subtitles, content summary, content keywords, content highlights, analyze.
 
-- [ ] Test source-fingerprint matching and assert mixed transcript/filmstrip artifacts fail with ARTIFACT_SOURCE_MISMATCH.
-- [ ] Run dk-video tests; expect missing exports.
-- [ ] Implement video media wrappers; subtitles extract audio then call public transcribeAudio. Content uses timestamped transcript and frames through video content Feature IDs.
-- [ ] Implement composite analyze dependencies: only supplies prerequisites; a skipped prerequisite causes MISSING_REQUIRED_ARTIFACT; JSONL is the only progress mode.
-- [ ] Verify test, build, and pack dry-run; commit: feat: add video cli phase one.
+- [x] Test source-fingerprint matching and assert mixed transcript/filmstrip artifacts fail with ARTIFACT_SOURCE_MISMATCH.
+- [x] Run dk-video tests; expect missing exports.
+- [x] Implement video media wrappers; subtitles extract audio then call public transcribeAudio. Content uses timestamped transcript and frames through video content Feature IDs.
+- [x] Implement composite analyze dependencies: only supplies prerequisites; a skipped prerequisite causes MISSING_REQUIRED_ARTIFACT; JSONL is the only progress mode.
+- [x] Verify test, build, and pack dry-run; commit: feat: add video cli phase one.
 
 ### Task 8: Add opt-in live AI and consumer smoke tests
 
@@ -107,12 +107,12 @@ Files: add live tests in ai-core, dk-audio, dk-image, dk-video; modify root scri
 
 Produces: pnpm test:live, skipped unless DKPLUS_LIVE_AI=1.
 
-- [ ] Test that live tests skip with no live flag.
-- [ ] Run pnpm test:live; expect exit 0 with skipped live cases.
-- [ ] Add Azure GPT-4o text summary, one-image description, and transcript-plus-filmstrip video summary tests. Add a Qwen-compatible safe text-analysis test.
-- [ ] Keep raw audio transcription and direct-audio translation out of the Qwen-compatible Chat live matrix; they remain feature-configurable and mock-covered until a dedicated ASR profile is configured.
-- [ ] Assert schemas and non-empty required fields only; redact provider errors and never snapshot prose.
-- [ ] Pack each public package into an ignored temporary directory and run its installed binary with help; commit: test: add live ai provider coverage.
+- [x] Test that live tests skip with no live flag.
+- [x] Run pnpm test:live; expect exit 0 with skipped live cases.
+- [x] Add Azure GPT-4o text summary, one-image description, and transcript-plus-filmstrip video summary tests. Add a Qwen-compatible safe text-analysis test.
+- [x] Keep raw audio transcription and direct-audio translation out of the Qwen-compatible Chat live matrix; they remain feature-configurable and mock-covered until a dedicated ASR profile is configured.
+- [x] Assert schemas and non-empty required fields only; redact provider errors and never snapshot prose.
+- [x] Pack each public package into an ignored temporary directory and run its installed binary with help; commit: test: add live ai provider coverage.
 
 ### Task 9: Document and verify phase one
 
@@ -120,12 +120,12 @@ Files: modify README.md, docs/DESIGN.md, .github/workflows/ci.yml, tests/jest/re
 
 Produces: bilingual human/agent documentation and CI validation for format, lint, typecheck, tests, builds, and package contents.
 
-- [ ] Test that every new workspace package has a manifest.
-- [ ] Run root test before packages exist; expect failure.
-- [ ] Document all 21 commands, output envelope, profile variable names, FFmpeg prerequisite, opt-in live test, and generation exclusion.
-- [ ] Configure CI to omit live tests and run pack dry-runs for all public packages.
-- [ ] Run format, lint, typecheck, test, build, then live tests only with externally injected credentials.
-- [ ] Commit: docs: document phase one media cli.
+- [x] Test that every new workspace package has a manifest.
+- [x] Run root test before packages exist; expect failure.
+- [x] Document all 21 commands, output envelope, profile variable names, FFmpeg prerequisite, opt-in live test, and generation exclusion.
+- [x] Configure CI to omit live tests and run pack dry-runs for all public packages.
+- [x] Run format, lint, typecheck, test, build, then live tests only with externally injected credentials.
+- [x] Commit: docs: document phase one media cli.
 
 ## Plan Self-review
 

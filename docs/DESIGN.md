@@ -2463,7 +2463,7 @@ Prompt优化且不改变Contract
 
 不建议第一版把所有列表功能一次全部做完。
 
-建议先完成：
+第一阶段已实现并暴露以下 21 个非生成式命令：
 
 ## `dk-audio`
 
@@ -2523,7 +2523,7 @@ analyze
 watermark
 ```
 
-这批完成以后，整套：
+这批已完成，整套：
 
 ```text
 AI Provider
@@ -2590,6 +2590,9 @@ generate
 
 organize
 ```
+
+其中 `generate` 仍是第二阶段概念：第一阶段没有 `dk-image generate`、视频生成
+命令或对应生成 API。
 
 ---
 
