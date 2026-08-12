@@ -68,4 +68,18 @@ describe("Transcript contract", () => {
       [{ startMs: 0, endMs: 1200 }, { startMs: 1200, endMs: 2400 }]
     );
   });
+
+  it("rejects malformed segments with a typed CLI error", () => {
+    assert.throws(
+      () =>
+        parseTranscript({
+          kind: "transcript",
+          schemaVersion: "1.0",
+          sourceFingerprint: { algorithm: "sha256", value: "a".repeat(64) },
+          language: "en",
+          segments: [{ id: "seg-001", startMs: 1200, endMs: 0, text: "Backwards." }]
+        }),
+      (error) => error instanceof CliError && error.code === "INVALID_TRANSCRIPT"
+    );
+  });
 });

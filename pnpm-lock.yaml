@@ -97,6 +97,9 @@ importers:
       '@repo/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      '@types/node':
+        specifier: ^24.10.2
+        version: 24.13.2
 
   packages/commitlint-config:
     dependencies:
@@ -112,6 +115,9 @@ importers:
       '@repo/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      '@types/node':
+        specifier: ^24.10.2
+        version: 24.13.2
 
   packages/eslint-config:
     dependencies:
