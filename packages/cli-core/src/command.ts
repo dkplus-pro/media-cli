@@ -5,12 +5,14 @@ import {
   type CliResult
 } from "@dkplus/contracts";
 
+import type { JsonSchema, RuntimeSchema } from "./schema.js";
+
 export interface CommandDefinition<Input, Output> {
   name: string;
   description: string;
   version: string;
-  inputSchema: unknown;
-  outputSchema: unknown;
+  inputSchema: RuntimeSchema<Input>;
+  outputSchema: RuntimeSchema<Output>;
   execute(input: Input): Output | Promise<Output>;
 }
 
@@ -18,8 +20,8 @@ export interface CommandDescriptor {
   name: string;
   description: string;
   version: string;
-  inputSchema: unknown;
-  outputSchema: unknown;
+  inputSchema: JsonSchema;
+  outputSchema: JsonSchema;
 }
 
 export interface CommandCatalog {
@@ -29,12 +31,14 @@ export interface CommandCatalog {
 
 export async function runCommand<Input, Output>(
   command: CommandDefinition<Input, Output>,
-  input: Input
+  input: unknown
 ): Promise<CliResult<Output>> {
   const context = { command: command.name, version: command.version };
 
   try {
-    return createSuccessResult(context, await command.execute(input));
+    const parsedInput = command.inputSchema.parse(input);
+    const output = await command.execute(parsedInput);
+    return createSuccessResult(context, command.outputSchema.parse(output));
   } catch (error) {
     return createErrorResult(
       context,
@@ -45,7 +49,15 @@ export async function runCommand<Input, Output>(
   }
 }
 
-export function describeCommands(commands: readonly CommandDefinition<unknown, unknown>[]): CommandCatalog {
+interface CommandMetadata {
+  name: string;
+  description: string;
+  version: string;
+  inputSchema: { jsonSchema: JsonSchema };
+  outputSchema: { jsonSchema: JsonSchema };
+}
+
+export function describeCommands(commands: readonly CommandMetadata[]): CommandCatalog {
   return {
     schemaVersion: "1.0",
     commands: commands
@@ -53,8 +65,8 @@ export function describeCommands(commands: readonly CommandDefinition<unknown, u
         name,
         description,
         version,
-        inputSchema,
-        outputSchema
+        inputSchema: inputSchema.jsonSchema,
+        outputSchema: outputSchema.jsonSchema
       }))
       .sort((left, right) => left.name.localeCompare(right.name))
   };

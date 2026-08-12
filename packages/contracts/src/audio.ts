@@ -47,10 +47,21 @@ function parseSegment(value: unknown, index: number): TranscriptSegment {
   const endMs = value["endMs"];
   const text = value["text"];
   if (typeof id !== "string" || id.length === 0) {
-    throw invalidTranscript({ field: `segments[${index}].id`, reason: "must be a non-empty string" });
+    throw invalidTranscript({
+      field: `segments[${index}].id`,
+      reason: "must be a non-empty string"
+    });
   }
-  if (typeof startMs !== "number" || !Number.isFinite(startMs) || startMs < 0 || !Number.isInteger(startMs)) {
-    throw invalidTranscript({ field: `segments[${index}].startMs`, reason: "must be a non-negative integer" });
+  if (
+    typeof startMs !== "number" ||
+    !Number.isFinite(startMs) ||
+    startMs < 0 ||
+    !Number.isInteger(startMs)
+  ) {
+    throw invalidTranscript({
+      field: `segments[${index}].startMs`,
+      reason: "must be a non-negative integer"
+    });
   }
   if (
     typeof endMs !== "number" ||
@@ -58,7 +69,10 @@ function parseSegment(value: unknown, index: number): TranscriptSegment {
     endMs < startMs ||
     !Number.isInteger(endMs)
   ) {
-    throw invalidTranscript({ field: `segments[${index}].endMs`, reason: "must be an integer at or after startMs" });
+    throw invalidTranscript({
+      field: `segments[${index}].endMs`,
+      reason: "must be an integer at or after startMs"
+    });
   }
   if (typeof text !== "string") {
     throw invalidTranscript({ field: `segments[${index}].text`, reason: "must be a string" });
@@ -74,10 +88,16 @@ export function parseTranscript(value: unknown): Transcript {
 
   const { kind, schemaVersion, sourceFingerprint, language, segments } = value;
   if (kind !== "transcript" || schemaVersion !== "1.0") {
-    throw invalidTranscript({ field: "kind/schemaVersion", reason: "must identify transcript schema 1.0" });
+    throw invalidTranscript({
+      field: "kind/schemaVersion",
+      reason: "must identify transcript schema 1.0"
+    });
   }
   if (!isSourceFingerprint(sourceFingerprint)) {
-    throw invalidTranscript({ field: "sourceFingerprint", reason: "must be a SHA-256 fingerprint" });
+    throw invalidTranscript({
+      field: "sourceFingerprint",
+      reason: "must be a SHA-256 fingerprint"
+    });
   }
   if (typeof language !== "string" || language.length === 0) {
     throw invalidTranscript({ field: "language", reason: "must be a non-empty string" });
@@ -86,11 +106,23 @@ export function parseTranscript(value: unknown): Transcript {
     throw invalidTranscript({ field: "segments", reason: "must be an array" });
   }
 
+  const parsedSegments = segments.map(parseSegment);
+  for (let index = 1; index < parsedSegments.length; index += 1) {
+    const previous = parsedSegments[index - 1];
+    const current = parsedSegments[index];
+    if (previous === undefined || current === undefined || current.startMs < previous.endMs) {
+      throw invalidTranscript({
+        field: `segments[${index}]`,
+        reason: "must be chronological and non-overlapping"
+      });
+    }
+  }
+
   return {
     kind,
     schemaVersion,
     sourceFingerprint,
     language,
-    segments: segments.map(parseSegment)
+    segments: parsedSegments
   };
 }

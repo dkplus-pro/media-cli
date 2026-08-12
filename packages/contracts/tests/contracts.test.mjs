@@ -65,7 +65,10 @@ describe("Transcript contract", () => {
     assert.equal(transcript.language, "en");
     assert.deepEqual(
       transcript.segments.map(({ startMs, endMs }) => ({ startMs, endMs })),
-      [{ startMs: 0, endMs: 1200 }, { startMs: 1200, endMs: 2400 }]
+      [
+        { startMs: 0, endMs: 1200 },
+        { startMs: 1200, endMs: 2400 }
+      ]
     );
   });
 
@@ -78,6 +81,23 @@ describe("Transcript contract", () => {
           sourceFingerprint: { algorithm: "sha256", value: "a".repeat(64) },
           language: "en",
           segments: [{ id: "seg-001", startMs: 1200, endMs: 0, text: "Backwards." }]
+        }),
+      (error) => error instanceof CliError && error.code === "INVALID_TRANSCRIPT"
+    );
+  });
+
+  it("rejects overlapping and out-of-order segments", () => {
+    assert.throws(
+      () =>
+        parseTranscript({
+          kind: "transcript",
+          schemaVersion: "1.0",
+          sourceFingerprint: { algorithm: "sha256", value: "a".repeat(64) },
+          language: "en",
+          segments: [
+            { id: "seg-001", startMs: 0, endMs: 1200, text: "First." },
+            { id: "seg-002", startMs: 1000, endMs: 2000, text: "Overlaps." }
+          ]
         }),
       (error) => error instanceof CliError && error.code === "INVALID_TRANSCRIPT"
     );
