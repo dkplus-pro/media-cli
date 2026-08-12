@@ -1,5 +1,3 @@
-import { CliError } from "@dkplus/contracts";
-
 import { assertOutputPathIsDistinct } from "./output.js";
 import { mediaProcessFailed, runMediaTool, type MediaProcessOptions } from "./process.js";
 
