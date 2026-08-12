@@ -34,6 +34,8 @@ The eight exported APIs are `probeVideo`, `extractVideoAudio`, `createVideoFilms
 
 Every video wrapper carries the SHA-256 fingerprint of the source video. `extractVideoSubtitles` extracts a temporary local audio file, calls the public `transcribeAudio` API with an explicitly injected `AudioTranscriber`, validates that audio transcript, then returns a canonical `Transcript` relinked to the video source. Without an injected transcriber it returns `AUDIO_TRANSCRIBER_UNAVAILABLE`; raw video/audio is never sent to a generic chat endpoint and no transcript is invented.
 
+Filmstrip output is non-destructive: an existing output path is rejected with `OUTPUT_EXISTS` unless `--force` is set (or `force: true` is supplied to the API), which permits it to be overwritten.
+
 Content APIs require a canonical `Transcript` and a `video-filmstrip` artifact whose source fingerprints match the requested video. A mix of artifacts from different videos returns `ARTIFACT_SOURCE_MISMATCH`. Their provider tasks use the exact feature IDs `video.content.summary`, `video.content.keywords`, and `video.content.highlights`, with timestamped transcript text and the filmstrip image attached as referenced visual content.
 
 `analyzeVideo` never generates prerequisites. It accepts only explicitly supplied probe, audio, filmstrip, subtitles, summary, keywords, and highlights artifacts. Any omitted artifact returns `MISSING_REQUIRED_ARTIFACT`.

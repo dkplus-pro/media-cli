@@ -230,8 +230,8 @@ function createCommands(dependencies: VideoCliDependencies) {
       { type: "object", required: ["kind", "sourceFingerprint", "outputPath", "image"] },
       videoFilmstripSchema
     ),
-    execute: ({ videoPath, outputPath, timestamps, width, height }) =>
-      createVideoFilmstrip(videoPath, outputPath, { timestamps, width, height })
+    execute: ({ videoPath, outputPath, timestamps, width, height, force }) =>
+      createVideoFilmstrip(videoPath, outputPath, { timestamps, width, height, force })
   };
   const subtitles: CommandDefinition<VideoPathInput, unknown> = {
     name: "subtitles",

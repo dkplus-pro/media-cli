@@ -1,4 +1,5 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 
@@ -92,9 +93,32 @@ export interface ExtractVideoAudioOptions {
   force?: boolean;
 }
 
+export interface CreateVideoFilmstripOptions extends Pick<
+  FilmstripOptions,
+  "timestamps" | "width" | "height"
+> {
+  force?: boolean;
+}
+
 export interface ExtractVideoSubtitlesOptions {
   transcriber?: AudioTranscriber;
   language?: string;
+}
+
+async function outputExists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function outputExistsError(): CliError {
+  return new CliError({
+    code: "OUTPUT_EXISTS",
+    message: "Refusing to overwrite an existing output file."
+  });
 }
 
 function videoProbeArtifact(
@@ -173,10 +197,17 @@ export async function extractVideoAudio(
 export async function createVideoFilmstrip(
   videoPath: string,
   outputPath: string,
-  options: Pick<FilmstripOptions, "timestamps" | "width" | "height">
+  options: CreateVideoFilmstripOptions
 ): Promise<VideoFilmstrip> {
+  if (!options.force && (await outputExists(outputPath))) {
+    throw outputExistsError();
+  }
   const sourceFingerprintPromise = fingerprintFile(videoPath);
-  const result = await createFilmstrip(videoPath, outputPath, options);
+  const result = await createFilmstrip(videoPath, outputPath, {
+    timestamps: options.timestamps,
+    width: options.width,
+    height: options.height
+  });
   const [sourceFingerprint, bytes, metadata] = await Promise.all([
     sourceFingerprintPromise,
     readFile(outputPath),
@@ -205,6 +236,12 @@ export async function extractVideoSubtitles(
   videoPath: string,
   options: ExtractVideoSubtitlesOptions = {}
 ): Promise<Transcript> {
+  if (options.transcriber === undefined) {
+    throw new CliError({
+      code: "AUDIO_TRANSCRIBER_UNAVAILABLE",
+      message: "Raw audio transcription requires a configured audio transcriber adapter."
+    });
+  }
   const directory = await mkdtemp(join(tmpdir(), "dk-video-subtitles-"));
   const audioPath = join(directory, "audio.wav");
   try {

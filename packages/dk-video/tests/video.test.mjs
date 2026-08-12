@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -88,11 +88,38 @@ describe("dk-video public APIs", () => {
     });
   });
 
-  it("returns a typed adapter error when subtitles lack an injected audio transcriber", async () => {
+  it("returns the adapter error before accessing an unavailable subtitle video", async () => {
     await assert.rejects(
-      () => extractVideoSubtitles(videoPath),
+      () => extractVideoSubtitles(join(tmpdir(), "dk-video-unavailable-subtitle-input.mp4")),
       (error) => error instanceof CliError && error.code === "AUDIO_TRANSCRIBER_UNAVAILABLE"
     );
+  });
+
+  it("refuses an existing filmstrip output unless force overwrites it with four frames", async () => {
+    await withTemporaryDirectory(async (directory) => {
+      const outputPath = join(directory, "filmstrip.png");
+      const options = { timestamps: [0, 1, 2, 3], width: 320, height: 180 };
+      await writeFile(outputPath, "occupied");
+
+      await assert.rejects(
+        () =>
+          createVideoFilmstrip(
+            join(directory, "unavailable-filmstrip-input.mp4"),
+            outputPath,
+            options
+          ),
+        (error) => error instanceof CliError && error.code === "OUTPUT_EXISTS"
+      );
+
+      const filmstrip = await createVideoFilmstrip(videoPath, outputPath, {
+        ...options,
+        force: true
+      });
+      assert.equal(filmstrip.outputPath, outputPath);
+      assert.deepEqual(filmstrip.timestamps, [0, 1, 2, 3]);
+      assert.equal(filmstrip.width, 320);
+      assert.equal(filmstrip.height, 180);
+    });
   });
 
   it("sends timestamped transcript content and the linked filmstrip image through the exact content features", async () => {

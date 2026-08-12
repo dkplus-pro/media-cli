@@ -91,6 +91,37 @@ describe("dk-video CLI", () => {
     assert.equal(JSON.parse(unknown.stdout.join("")).error.code, "UNKNOWN_COMMAND");
   });
 
+  it("honors global force for existing four-frame filmstrip outputs", async () => {
+    await withTemporaryDirectory(async (directory) => {
+      const outputPath = join(directory, "filmstrip.png");
+      await writeFile(outputPath, "occupied");
+
+      const blocked = writers();
+      const blockedResult = await runVideoCli(
+        [
+          "filmstrip",
+          join(directory, "unavailable-filmstrip-input.mp4"),
+          "--output",
+          outputPath,
+          "--json"
+        ],
+        blocked.writers
+      );
+      assert.equal(blockedResult.exitCode, 1);
+      assert.equal(JSON.parse(blocked.stdout.join("")).error.code, "OUTPUT_EXISTS");
+
+      const forced = writers();
+      const forcedResult = await runVideoCli(
+        ["filmstrip", videoPath, "--output", outputPath, "--force", "--json"],
+        forced.writers
+      );
+      const artifact = JSON.parse(forced.stdout.join("")).data;
+      assert.equal(forcedResult.exitCode, 0);
+      assert.equal(artifact.outputPath, outputPath);
+      assert.deepEqual(artifact.timestamps, [0, 1, 2, 3]);
+    });
+  });
+
   it("returns MISSING_REQUIRED_ARTIFACT when analyze prerequisites are omitted", async () => {
     const output = writers();
     const result = await runVideoCli(["analyze", videoPath, "--json"], output.writers);

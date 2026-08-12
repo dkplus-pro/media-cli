@@ -3,6 +3,7 @@ export {
   extractVideoAudio,
   extractVideoSubtitles,
   probeVideo,
+  type CreateVideoFilmstripOptions,
   type ExtractVideoAudioOptions,
   type ExtractVideoSubtitlesOptions,
   type VideoAudio,

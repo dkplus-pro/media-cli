@@ -34,6 +34,8 @@ dk-video analyze clip.mp4 --probe probe.json --audio audio.json --filmstrip film
 
 所有视频包装产物都带有源视频的 SHA-256 指纹。`extractVideoSubtitles` 会提取临时本地音频，使用显式注入的 `AudioTranscriber` 调用公开的 `transcribeAudio` API，验证音频 Transcript 后将其重新关联到视频源。未注入 transcriber 时返回 `AUDIO_TRANSCRIBER_UNAVAILABLE`；不会把原始视频或音频发送给通用聊天端点，也不会伪造 Transcript。
 
+filmstrip 输出遵循非破坏性行为：目标路径已存在时会返回 `OUTPUT_EXISTS`，除非设置 `--force`（或 API 传入 `force: true`），此时允许覆盖目标文件。
+
 内容 API 需要规范 `Transcript` 和 `video-filmstrip` 产物，且两者必须与请求视频的源指纹一致。混用不同视频的产物会返回 `ARTIFACT_SOURCE_MISMATCH`。Provider 调用严格使用 `video.content.summary`、`video.content.keywords`、`video.content.highlights` Feature ID，并携带带时间戳的 Transcript 文本及引用的 filmstrip 图片内容。
 
 `analyzeVideo` 不会生成任何前置产物。它只接受显式传入的 probe、audio、filmstrip、subtitles、summary、keywords 和 highlights；缺少任意一项会返回 `MISSING_REQUIRED_ARTIFACT`。
