@@ -2,7 +2,7 @@
 
 For agentic workers: use subagent-driven-development or executing-plans task-by-task.
 
-Goal: Build the 20 non-generative phase-one commands specified in docs/DESIGN.md.
+Goal: Build the 21 non-generative phase-one commands specified in docs/DESIGN.md.
 
 Architecture: Shared contracts, CLI infrastructure, AI routing, and media adapters sit below three publishable packages. Domain functions are reusable Node APIs; CLI adapters only parse arguments and serialize their results. dk-video may call public dk-audio APIs; no package may depend on dk-video.
 
@@ -34,11 +34,11 @@ Files: create packages/contracts source for cli, errors, artifacts, audio, image
 
 Produces: CliResult, CliError, Transcript, artifact fingerprints, CommandDescriptor, runCommand, emitResult, emitProgress, and describeCommands.
 
-- [ ] Test a stable success envelope and a typed IMAGE_NOT_FOUND failure envelope.
-- [ ] Run package tests; expect unresolved exports.
-- [ ] Implement a versioned Transcript with sourceFingerprint and timestamped segments, plus a single success-or-error result envelope.
-- [ ] Verify contracts and CLI-core tests plus typecheck.
-- [ ] Commit: feat: add shared cli contracts.
+- [x] Test a stable success envelope and a typed IMAGE_NOT_FOUND failure envelope.
+- [x] Run package tests; expect unresolved exports.
+- [x] Implement a versioned Transcript with sourceFingerprint and timestamped segments, plus a single success-or-error result envelope.
+- [x] Verify contracts and CLI-core tests plus typecheck.
+- [x] Commit: feat: add shared cli contracts.
 
 ### Task 3: Add ai-core and providers
 
@@ -49,6 +49,7 @@ Produces: AIProvider.execute(task), FeatureResolver.resolve(feature), mock, Azur
 - [ ] Test that audio.speech.summarize resolves to an Azure profile and Azure sends api-key auth to the configured deployment chat-completions endpoint.
 - [ ] Run ai-core tests; expect missing modules.
 - [ ] Implement typed tasks with feature, prompt, optional images, and Zod parsing. Azure treats the configured model as its deployment and calls openai/deployments/{deployment}/chat/completions with a configurable API version; Qwen uses Bearer auth at baseUrl/chat/completions.
+- [ ] Support canonical Azure variables AZURE_OPENAI_API_KEY, AZURE_OPENAI_DEPLOYMENT, and AZURE_OPENAI_API_VERSION plus compatible aliases AZURE_OPENAI_KEY and AZURE_OPENAI_MODEL. Support DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, and DASHSCOPE_MODEL plus compatible QWEN_API_KEY and QWEN_BASE_URL aliases; default the compatible text model only when the profile supplies no model.
 - [ ] Verify all provider tests use stubbed fetch and read no real environment values.
 - [ ] Commit: feat: add ai feature routing.
 
@@ -109,6 +110,7 @@ Produces: pnpm test:live, skipped unless DKPLUS_LIVE_AI=1.
 - [ ] Test that live tests skip with no live flag.
 - [ ] Run pnpm test:live; expect exit 0 with skipped live cases.
 - [ ] Add Azure GPT-4o text summary, one-image description, and transcript-plus-filmstrip video summary tests. Add a Qwen-compatible safe text-analysis test.
+- [ ] Keep raw audio transcription and direct-audio translation out of the Qwen-compatible Chat live matrix; they remain feature-configurable and mock-covered until a dedicated ASR profile is configured.
 - [ ] Assert schemas and non-empty required fields only; redact provider errors and never snapshot prose.
 - [ ] Pack each public package into an ignored temporary directory and run its installed binary with help; commit: test: add live ai provider coverage.
 
@@ -120,7 +122,7 @@ Produces: bilingual human/agent documentation and CI validation for format, lint
 
 - [ ] Test that every new workspace package has a manifest.
 - [ ] Run root test before packages exist; expect failure.
-- [ ] Document all 20 commands, output envelope, profile variable names, FFmpeg prerequisite, opt-in live test, and generation exclusion.
+- [ ] Document all 21 commands, output envelope, profile variable names, FFmpeg prerequisite, opt-in live test, and generation exclusion.
 - [ ] Configure CI to omit live tests and run pack dry-runs for all public packages.
 - [ ] Run format, lint, typecheck, test, build, then live tests only with externally injected credentials.
 - [ ] Commit: docs: document phase one media cli.
