@@ -1,28 +1,54 @@
-function firstEnvironmentValue(names) {
+const DEFAULT_AZURE_API_VERSION = "2024-10-21";
+
+function firstEnvironmentValue(environment, names) {
   for (const name of names) {
-    const value = process.env[name];
+    const value = environment[name];
     if (value?.trim()) return value.trim();
   }
   throw new Error(`Missing live provider configuration: ${names[0]}.`);
 }
 
+function optionalEnvironmentValue(environment, names) {
+  for (const name of names) {
+    const value = environment[name];
+    if (value?.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+export function azureLiveConfig(environment = process.env) {
+  return {
+    endpoint: firstEnvironmentValue(environment, [
+      "AZURE_OPENAI_ENDPOINT",
+      "AZURE_OPENAI_BASE_URL"
+    ]),
+    apiKey: firstEnvironmentValue(environment, ["AZURE_OPENAI_API_KEY", "AZURE_OPENAI_KEY"]),
+    deployment: firstEnvironmentValue(environment, [
+      "AZURE_OPENAI_DEPLOYMENT",
+      "AZURE_OPENAI_MODEL"
+    ]),
+    apiVersion:
+      optionalEnvironmentValue(environment, ["AZURE_OPENAI_API_VERSION", "AZURE_OPENAI_VERSION"]) ??
+      DEFAULT_AZURE_API_VERSION
+  };
+}
+
+export function qwenLiveConfig(environment = process.env) {
+  return {
+    baseUrl: firstEnvironmentValue(environment, ["DASHSCOPE_BASE_URL", "QWEN_BASE_URL"]),
+    apiKey: firstEnvironmentValue(environment, ["DASHSCOPE_API_KEY", "QWEN_API_KEY"]),
+    model: optionalEnvironmentValue(environment, ["DASHSCOPE_MODEL", "QWEN_MODEL"])
+  };
+}
+
 export async function azureProvider() {
   const { createAzureOpenAIProvider } = await import("../../packages/ai-core/dist/index.js");
-  return createAzureOpenAIProvider({
-    endpoint: firstEnvironmentValue(["AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_BASE_URL"]),
-    apiKey: firstEnvironmentValue(["AZURE_OPENAI_API_KEY", "AZURE_OPENAI_KEY"]),
-    deployment: firstEnvironmentValue(["AZURE_OPENAI_DEPLOYMENT", "AZURE_OPENAI_MODEL"]),
-    apiVersion: firstEnvironmentValue(["AZURE_OPENAI_API_VERSION", "AZURE_OPENAI_VERSION"])
-  });
+  return createAzureOpenAIProvider(azureLiveConfig());
 }
 
 export async function qwenProvider() {
   const { createOpenAICompatibleProvider } = await import("../../packages/ai-core/dist/index.js");
-  return createOpenAICompatibleProvider({
-    baseUrl: firstEnvironmentValue(["DASHSCOPE_BASE_URL", "QWEN_BASE_URL"]),
-    apiKey: firstEnvironmentValue(["DASHSCOPE_API_KEY", "QWEN_API_KEY"]),
-    model: firstEnvironmentValue(["DASHSCOPE_MODEL", "QWEN_MODEL"])
-  });
+  return createOpenAICompatibleProvider(qwenLiveConfig());
 }
 
 export async function runSanitizedLive(label, operation) {
