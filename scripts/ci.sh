@@ -17,7 +17,7 @@ ci_group "Install dependencies"
 install_dependencies "$PM"
 ci_endgroup
 
-for script in lint typecheck test build; do
+for script in format lint typecheck test build test:smoke; do
   ci_group "Run $script"
   run_package_script_if_present "$PM" "$script"
   ci_endgroup
