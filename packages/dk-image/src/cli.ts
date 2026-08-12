@@ -4,7 +4,6 @@ import type { AIProvider } from "@dkplus/ai-core";
 import {
   baseOptions,
   defineSchema,
-  describeCommands,
   emitProgress,
   emitResult,
   parseBaseOptions,
@@ -22,6 +21,7 @@ import {
 } from "@dkplus/contracts";
 import { z } from "zod";
 
+import { loadConfiguredImageProvider, type ImageProviderFactory } from "./ai-config.js";
 import {
   analyzeImage,
   describeImage,
@@ -42,6 +42,7 @@ const VERSION = "0.1.0";
 
 export interface ImageCliDependencies {
   provider?: AIProvider;
+  providerFactory?: ImageProviderFactory;
   stdout?: OutputWriter;
   stderr?: OutputWriter;
 }
@@ -281,6 +282,16 @@ function namedCommand(name: string, commands: ReturnType<typeof createCommands>)
   return Object.values(commands).find((command) => command.name === name);
 }
 
+function requiresAiProvider(name: string): boolean {
+  return (
+    name === "content describe" ||
+    name === "content keywords" ||
+    name === "content ocr" ||
+    name === "content score" ||
+    name === "analyze"
+  );
+}
+
 async function executeCommand(
   name: string,
   input: unknown,
@@ -337,7 +348,7 @@ export async function runImageCli(
     return { exitCode: 1 };
   }
 
-  const commands = createCommands(dependencies);
+  let commands = createCommands(dependencies);
   const [namespace, action, ...commandArguments] = parsed.positionals;
   const isContentCommand = namespace === "content" && action !== undefined;
   const name = isContentCommand ? `content ${action}` : (namespace ?? "dk-image");
@@ -381,19 +392,6 @@ export async function runImageCli(
     }
     return { exitCode: 0 };
   }
-  if (namespace === "describe" && action === undefined) {
-    emitResult(
-      createSuccessResult(
-        { command: "describe", version: VERSION },
-        describeCommands(Object.values(commands))
-      ),
-      {
-        mode: parsed.options.jsonl ? "jsonl" : "json",
-        stdout
-      }
-    );
-    return { exitCode: 0 };
-  }
   if (command === undefined) {
     emitResult(
       failedResult(
@@ -426,6 +424,11 @@ export async function runImageCli(
 
   let result: CliResult<unknown>;
   try {
+    const provider =
+      parsed.options.config !== undefined && requiresAiProvider(name)
+        ? await loadConfiguredImageProvider(parsed.options.config, dependencies.providerFactory)
+        : dependencies.provider;
+    commands = createCommands({ ...dependencies, provider });
     const input = commandInput(name, inputArguments, parsed.options.force);
     emitProgress({ stage: "execute" }, { mode: parsed.options.jsonl ? "jsonl" : "json", stdout });
     result = await executeCommand(name, input, commands);
