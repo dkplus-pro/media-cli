@@ -63,7 +63,7 @@ common-cli 的业务能力以插件形式接入。按本指南新建一个插件
   ```bash
   COMMON_CLI_PLUGINS_DIR=/tmp/my-plugin node dist/common-cli.js --json my-cmd
   ```
-- 项目 `./plugins/` 与全局 `~/.common-cli/plugins/` 是**容器目录**（一级子目录 = 插件），优先级依次降低。
+- 项目 `./plugins/`、全局 `~/.common-cli/plugins/` 与**随包内置**（`<包根>/plugins/`，npm 发布用）是**容器目录**（一级子目录 = 插件），优先级依次降低。
 
 ## 校验与常见警告
 

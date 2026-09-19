@@ -9,12 +9,22 @@
 ## 快速开始
 
 ```bash
+npm i -g @dkplus/media-cli    # 全局安装（自带全部内置插件）
+common-cli --help
+common-cli --json spec        # AI 自省：完整命令树 JSON
+```
+
+本地开发：
+
+```bash
 pnpm install
 pnpm build
 node dist/common-cli.js --help        # 人类友好帮助
 node dist/common-cli.js --json spec   # AI 自省：完整命令树 JSON
 node dist/common-cli.js --json hello --name AI   # 示例插件命令
 ```
+
+插件发现优先级：`COMMON_CLI_PLUGINS_DIR` > 项目 `./plugins/` > 全局 `~/.common-cli/plugins/` > **随包内置**（同名先到先得，可用同名插件覆盖内置版本）。
 
 ## 人/AI 双契约（摘要）
 

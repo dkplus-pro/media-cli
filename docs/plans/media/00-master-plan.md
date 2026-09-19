@@ -33,6 +33,7 @@
 | D10 | 外部二进制 | env 可覆盖：`FFMPEG_PATH` / `FFPROBE_PATH` / `WHISPER_CPP_BIN` / `WHISPER_MODEL`；默认查 PATH；缺失/不可执行 → `E_MISSING_DEPENDENCY`，`details` 带安装提示 | 可测试（指向假路径即可触发错误分支）；对用户透明 |
 | D11 | 远端 base URL | `SUNO_BASE_URL` 默认 `https://open.suno.cn`；azure 端点本身即 env。全部可指向 127.0.0.1 mock 服务器 | e2e 测试不依赖外网与真实 key |
 | D12 | 提交格式 | media 阶段提交信息用 `media-NN: 摘要`（区别于壳的 `phase-NN`） | git 历史可区分壳与 media 两个建设期 |
+| D13 | npm 发布 | 包名 `@dkplus/media-cli`；新增第四插件发现源「随包内置」（`<包根>/plugins/`，优先级最低：env > project > global > bundled），随包分发、随装随用 | npm 全局安装后在任意目录可用全部命令；用户可用同名插件覆盖内置版本（阶段 05） |
 
 ## 3. 命令契约
 
@@ -165,6 +166,7 @@ data：`{ "path": string, "bytes": number, "format": string, "size": string, "re
 | 02 | `02-media-av.md` | media-av 插件：filmstrip / to-audio / transcribe | 01 |
 | 03 | `03-azure-image.md` | azure-image 插件：池调度 + generations/edits | 01 |
 | 04 | `04-suno-music.md` | suno-music 插件：提交/轮询/下载 + 辅助命令 | 01 |
+| 05 | `05-npm-publish.md` | npm 发布准备：bundled 插件源 + `@dkplus/media-cli` 元数据 | 01–04 |
 
 （02–04 仅依赖 01，但按 §8 协议严格串行执行。）
 

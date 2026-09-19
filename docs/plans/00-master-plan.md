@@ -117,6 +117,7 @@
 1. `COMMON_CLI_PLUGINS_DIR`（`:` 分隔，测试与高级用法）
 2. 项目 `./plugins/`（仅当存在）
 3. 全局 `~/.common-cli/plugins/`
+4. 随包内置 `<包根>/plugins/`（npm 发布用；按 CLI 模块位置向上找 package.json 定位包根；与项目目录相同时跳过）
 
 语义：`COMMON_CLI_PLUGINS_DIR` 的每一项即**单个插件目录**（入口 `index.mjs`）；项目与全局路径是**容器目录**，其一级子目录为插件目录。
 

@@ -1,17 +1,42 @@
 {
-  "name": "common-cli",
+  "name": "@dkplus/media-cli",
   "version": "0.1.0",
-  "private": true,
+  "description": "通用插件化 Node CLI：视频胶片图/音视频转化（ffmpeg）、SRT 字幕（whisper.cpp）、Azure gpt-image-2 生图、Suno 音乐生成；给人用也给 AI 用",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=20"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dkplus-pro/media-cli.git"
+  },
+  "keywords": [
+    "cli",
+    "media",
+    "video",
+    "audio",
+    "ffmpeg",
+    "whisper",
+    "srt",
+    "subtitle",
+    "azure-openai",
+    "gpt-image",
+    "suno",
+    "text-to-image",
+    "text-to-music",
+    "ai"
+  ],
   "bin": {
     "common-cli": "dist/common-cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "plugins"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsx src/bin/common-cli.ts",

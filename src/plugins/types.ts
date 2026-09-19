@@ -18,7 +18,7 @@ export interface PluginManifest {
   commands: PluginCommandDef[];
 }
 
-export type PluginSource = "env" | "project" | "global";
+export type PluginSource = "env" | "project" | "global" | "bundled";
 
 export interface PluginCandidate {
   dir: string;

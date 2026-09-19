@@ -34,7 +34,7 @@ describe("输出契约 e2e", () => {
   it("version 人类模式输出到 stdout", async () => {
     const r = await cli(["version"]);
     expect(r.code).toBe(0);
-    expect(r.stdout).toContain("common-cli");
+    expect(r.stdout).toContain("@dkplus/media-cli");
     expect(r.stdout).toContain("0.1.0");
   });
 
@@ -48,7 +48,7 @@ describe("输出契约 e2e", () => {
       warnings: unknown[];
     };
     expect(parsed.ok).toBe(true);
-    expect(parsed.data).toEqual({ name: "common-cli", version: "0.1.0" });
+    expect(parsed.data).toEqual({ name: "@dkplus/media-cli", version: "0.1.0" });
     expect(parsed.warnings).toEqual([]);
   });
 

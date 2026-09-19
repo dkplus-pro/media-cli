@@ -47,7 +47,7 @@ describe("spec 自省 e2e", () => {
     expect(r.code).toBe(0);
     const parsed = JSON.parse(r.stdout) as SpecEnvelope;
     expect(parsed.ok).toBe(true);
-    expect(parsed.data?.name).toBe("common-cli");
+    expect(parsed.data?.name).toBe("@dkplus/media-cli");
     expect(parsed.data?.version).toBe("0.1.0");
 
     const byName = new Map(parsed.data?.commands.map((c) => [c.name, c]));

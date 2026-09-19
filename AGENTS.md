@@ -49,7 +49,7 @@ tests/          unit/（直接 import src）+ e2e/（spawn dist 真进程）+ fi
 
 ## 5. 插件契约
 
-- 位置与优先级：环境变量 `COMMON_CLI_PLUGINS_DIR`（`:` 分隔，测试用）> 项目 `./plugins/` > 全局 `~/.common-cli/plugins/`；同名插件按此顺序先到先得，后者跳过并警告。
+- 位置与优先级：环境变量 `COMMON_CLI_PLUGINS_DIR`（`:` 分隔，测试用）> 项目 `./plugins/` > 全局 `~/.common-cli/plugins/` > 随包内置（包内 `plugins/`，npm 发布用）；同名插件按此顺序先到先得，后者跳过并警告。
 - 形态：每个插件一个目录，入口 `index.mjs`（ESM），默认导出声明式 manifest：
   `{ name, version, commands: [{ name, description, options?, handler }] }`。
 - 校验：手写校验（`src/plugins/manifest.ts`），不引入第三方 schema 库。
