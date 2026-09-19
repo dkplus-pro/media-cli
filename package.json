@@ -1,60 +1,42 @@
 {
-  "name": "dk-media",
-  "version": "0.0.0",
+  "name": "common-cli",
+  "version": "0.1.0",
   "private": true,
-  "description": "A media CLI project.",
-  "license": "MIT",
   "type": "module",
-  "scripts": {
-    "build": "turbo run build",
-    "build:demo": "pnpm --filter @dk-media/demo run build",
-    "build:pages": "bash scripts/deploy-github-pages.sh",
-    "ci": "bash scripts/ci.sh",
-    "clean": "turbo run clean",
-    "commitlint": "commitlint",
-    "dev": "turbo run dev --parallel",
-    "format": "prettier --check .",
-    "format:write": "prettier --write .",
-    "lint": "turbo run lint && pnpm run lint:root",
-    "lint:root": "eslint . --max-warnings=0",
-    "prepare": "husky",
-    "test": "pnpm run test:unit && turbo run test && pnpm run test:e2e",
-    "test:e2e": "playwright test",
-    "test:live": "pnpm --filter @dkplus/dk-audio... --filter @dkplus/dk-image... --filter @dkplus/dk-video... run build && node --test tests/live/*.test.mjs",
-    "test:smoke": "pnpm --filter @dkplus/dk-audio... --filter @dkplus/dk-image... --filter @dkplus/dk-video... run build && node --test tests/smoke/*.test.mjs",
-    "test:unit": "jest --config jest.config.cjs",
-    "typecheck": "turbo run typecheck",
-    "verify": "bash scripts/verify.sh"
+  "engines": {
+    "node": ">=20"
   },
-  "lint-staged": {
-    "*.{json,md,mdx,css,scss,yaml,yml}": [
-      "prettier --write"
-    ],
-    "*.{js,cjs,mjs,ts,tsx}": [
-      "eslint --fix",
-      "prettier --write"
-    ]
+  "bin": {
+    "common-cli": "dist/common-cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx src/bin/common-cli.ts",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "pnpm -s build && vitest run",
+    "prepare": "simple-git-hooks"
   },
   "devDependencies": {
-    "@commitlint/cli": "21.2.0",
-    "@playwright/test": "^1.61.1",
-    "@repo/commitlint-config": "workspace:*",
-    "@repo/eslint-config": "workspace:*",
-    "@repo/prettier-config": "workspace:*",
-    "@repo/tsconfig": "workspace:*",
-    "@types/jest": "^30.0.0",
-    "eslint": "10.6.0",
-    "husky": "9.1.7",
-    "jest": "^30.4.2",
-    "lint-staged": "17.0.8",
-    "prettier": "3.9.4",
-    "prettier-plugin-packagejson": "3.0.2",
-    "turbo": "2.10.4",
-    "typescript": "6.0.3"
+    "@biomejs/biome": "^2.2.0",
+    "@types/node": "^24.0.0",
+    "lint-staged": "^16.1.0",
+    "simple-git-hooks": "^2.13.0",
+    "tsup": "^8.5.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
   },
-  "packageManager": "pnpm@11.10.0",
-  "engines": {
-    "node": ">=20.19.5",
-    "pnpm": ">=10.1.0"
+  "simple-git-hooks": {
+    "pre-commit": "pnpm lint-staged"
+  },
+  "lint-staged": {
+    "*.{ts,js,mjs,json,md}": "biome check --write"
+  },
+  "dependencies": {
+    "commander": "^15.0.0"
   }
 }

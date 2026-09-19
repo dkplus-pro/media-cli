@@ -1,66 +1,32 @@
-# dkplus Media CLI
+# common-cli
 
-`dkplus Media CLI` is a pnpm/Turborepo workspace for three publishable,
-machine-oriented media CLIs:
+通用 Node CLI 壳：给人用，也给 AI 用。本仓库不含具体业务功能，业务能力以**插件**形式接入（见 [插件开发指南](docs/plugin-development.md)）。
 
-- `@dkplus/dk-audio` — six audio commands
-- `@dkplus/dk-video` — eight video commands
-- `@dkplus/dk-image` — seven image commands
+- 方案记录与架构决策：[docs/plans/00-master-plan.md](docs/plans/00-master-plan.md)
+- 架构硬约束（协作者必读）：[AGENTS.md](AGENTS.md)
+- 阶段执行文档：[docs/plans/01](docs/plans/01-repo-foundation.md) · [02](docs/plans/02-core-shell-and-contracts.md) · [03](docs/plans/03-plugin-system.md) · [04](docs/plans/04-introspection-and-example.md) · [05](docs/plans/05-testing-and-hardening.md)
 
-Phase one implements 21 non-generative commands. It deliberately does **not**
-expose image or video generation.
-
-## Documentation
-
-- [English phase-one CLI guide](docs/en/phase-one-cli.md)
-- [简体中文第一阶段 CLI 指南](docs/zh-CN/phase-one-cli.md)
-- [Architecture and future-phase design](docs/DESIGN.md)
-
-## Requirements and install
-
-- Node.js `>=20.19.5` (Node 22 LTS recommended)
-- pnpm `>=10.1.0` through Corepack
-- `ffmpeg` and `ffprobe` on `PATH` for audio/video probing, extraction, and
-  filmstrips; programmatic media-core callers can override their executable
-  paths.
+## 快速开始
 
 ```bash
-corepack enable
-pnpm install --frozen-lockfile
+pnpm install
 pnpm build
-
-# Run a workspace binary during development.
-pnpm --filter @dkplus/dk-audio exec dk-audio --help
+node dist/common-cli.js --help        # 人类友好帮助
+node dist/common-cli.js --json spec   # AI 自省：完整命令树 JSON
+node dist/common-cli.js --json hello --name AI   # 示例插件命令
 ```
 
-All CLIs emit a single JSON success-or-error envelope to stdout. Use `--help`
-for usage and `--schema --json` to inspect an individual command contract.
+## 人/AI 双契约（摘要）
 
-## Development and verification
+- `--json`：stdout 有且只有一个 JSON 包络 `{ ok, data | error, warnings }`，可直接 `JSON.parse`
+- stdout 只出数据，stderr 只出日志/警告；错误码 `E_*` 稳定，退出码成文
+- 壳永不交互式提问，缺参数直接结构化报错——AI/脚本调用永不挂起
+
+## 开发
 
 ```bash
-pnpm format       # Prettier check only
-pnpm lint
-pnpm typecheck
-pnpm test         # Jest, workspace tests, and Playwright; never live providers
-pnpm build
-pnpm test:live    # Skips unless DKPLUS_LIVE_AI=1 is explicitly set
-pnpm test:smoke   # Packs every public package, installs a disposable consumer, runs CLI help
+pnpm dev -- --json version   # tsx 直跑源码
+pnpm lint && pnpm test       # Biome + Vitest（e2e spawn dist 真进程）
 ```
 
-CI installs with a frozen lockfile, keeps Playwright browser preparation, and
-runs formatting, linting, typechecks, non-live tests, builds, and the package
-consumer smoke test. It never invokes `test:live`.
-
-## Repository layout
-
-```text
-packages/contracts/   Shared result, error, artifact, and transcript contracts
-packages/cli-core/    Shared flags, schemas, command runner, JSON/JSONL output
-packages/ai-core/     Feature routing plus Azure/OpenAI-compatible providers
-packages/media-core/  FFmpeg/ffprobe and image adapters
-packages/testing/     Deterministic fixtures and test helpers
-packages/dk-audio/    Publishable dk-audio package and binary
-packages/dk-image/    Publishable dk-image package and binary
-packages/dk-video/    Publishable dk-video package and binary
-```
+技术底座：TypeScript + tsup（纯 ESM）· commander · pnpm · Biome · Vitest · Node >= 20。

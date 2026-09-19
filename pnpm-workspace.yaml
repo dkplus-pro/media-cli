@@ -1,8 +1,0 @@
-packages:
-  - apps/*
-  - packages/*
-allowBuilds:
-  "@swc/core": true
-  core-js: true
-  sharp: false
-  unrs-resolver: true

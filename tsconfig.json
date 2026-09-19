@@ -1,5 +1,15 @@
 {
-  "extends": "@repo/tsconfig/base.json",
-  "files": [],
-  "references": []
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "resolveJsonModule": true,
+    "verbatimModuleSyntax": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src", "tests", "tsup.config.ts"]
 }

@@ -1,29 +1,5 @@
-# Dependencies
 node_modules/
-.pnpm-store/
-
-# Build outputs
 dist/
-build/
-coverage/
-playwright-report/
-test-results/
-.turbo/
-.worktrees
-
-# Logs
 *.log
-npm-debug.log*
-pnpm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Environment
-.env
-.env.*
-!.env.example
-
-# OS/editor
 .DS_Store
-.idea/
-.vscode/
+coverage/
