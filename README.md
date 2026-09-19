@@ -68,3 +68,17 @@ node dist/common-cli.js --json image-gen --prompt "改成水彩风" --ref apple.
 | `AZURE_IMAGE_API_VERSION` | `2025-04-01-preview` | gpt-image-2 若要求更新版本，设此变量即可 |
 
 调度策略：每次请求随机选一个账号发起，401/403/429/5xx 自动轮换下一账号重试，全池失败报 `E_PROVIDER_ERROR`；400 类参数错误不轮换。任何输出都不含 key。
+
+### suno-music（文生音乐 / 文生音效，open.suno.cn）
+
+```bash
+export SUNO_API_KEY="你的密钥"
+node dist/common-cli.js --json suno-gen --prompt "lo-fi hip hop" --output song.mp3    # 灵感模式（每次生成 2 首，落盘为 song-1/-2.mp3）
+node dist/common-cli.js --json suno-gen --lyrics "歌词..." --tags "pop" --instrumental  # 自定义歌词模式
+node dist/common-cli.js --json suno-sound --text "雷雨声" --loop --output rain.mp3     # 文生音效
+node dist/common-cli.js --json suno-gen --prompt "..." --no-wait                       # 只提交，返回 taskIds
+node dist/common-cli.js --json suno-task --id 204 && node dist/common-cli.js --json suno-download --id 204 --output s.mp3
+node dist/common-cli.js --json suno-balance                                            # 查积分
+```
+
+默认阻塞轮询至完成并自动下载（`SUNO_TIMEOUT_MS` 默认 600000，超时的 `details.taskIds` 可用 `suno-download` 恢复，不浪费已扣积分）。音频链接限时 1 小时，完成即下载。`suno-gen` 模型默认 `chirp-hawk`；`suno-sound` 模型可选 `chirp-crow`/`chirp-fenix`。`SUNO_BASE_URL` 可指向本地 mock（e2e 即此方式）。
