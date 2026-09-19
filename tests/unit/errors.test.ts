@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CliError, exitCodeForError } from "../../src/core/errors.js";
+import { asCodedError, CliError, exitCodeForError } from "../../src/core/errors.js";
 import { EXIT_CODES } from "../../src/core/exit-codes.js";
 
 describe("exitCodeForError", () => {
@@ -22,6 +22,9 @@ describe("exitCodeForError", () => {
       "E_PLUGIN_LOAD_FAILED",
       "E_PLUGIN_COMMAND_CONFLICT",
       "E_PLUGIN_DUPLICATE",
+      "E_CONFIG",
+      "E_MISSING_DEPENDENCY",
+      "E_PROVIDER_ERROR",
     ] as const;
     for (const code of commandCodes) {
       expect(exitCodeForError(new CliError(code, "boom"))).toBe(EXIT_CODES.COMMAND);
@@ -51,5 +54,32 @@ describe("CliError", () => {
   it("defaults details to undefined", () => {
     const err = new CliError("E_INTERNAL", "boom");
     expect(err.details).toBeUndefined();
+  });
+});
+
+describe("asCodedError", () => {
+  it("wraps duck-typed coded errors into CliError", () => {
+    const err = asCodedError(
+      Object.assign(new Error("bad"), { code: "E_CONFIG", details: { var: "X" } }),
+    );
+    expect(err).toBeInstanceOf(CliError);
+    expect(err?.code).toBe("E_CONFIG");
+    expect(err?.message).toBe("bad");
+    expect(err?.details).toEqual({ var: "X" });
+  });
+
+  it("rejects unregistered codes", () => {
+    expect(asCodedError({ code: "E_NOPE", message: "boom" })).toBeUndefined();
+  });
+
+  it("rejects objects without a string code", () => {
+    expect(asCodedError(new Error("plain"))).toBeUndefined();
+    expect(asCodedError({ message: "no code" })).toBeUndefined();
+  });
+
+  it("rejects non-object values", () => {
+    expect(asCodedError(null)).toBeUndefined();
+    expect(asCodedError(undefined)).toBeUndefined();
+    expect(asCodedError("E_CONFIG")).toBeUndefined();
   });
 });

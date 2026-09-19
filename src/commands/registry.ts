@@ -1,5 +1,5 @@
 import type { Command } from "commander";
-import { CliError, exitCodeForError } from "../core/errors.js";
+import { asCodedError, CliError, exitCodeForError } from "../core/errors.js";
 import type { Warning } from "../core/output/warnings.js";
 import { writeResult } from "../core/output/writer.js";
 import type { CommandDefinition, RunContext } from "../core/types.js";
@@ -50,7 +50,8 @@ export class CommandRegistry {
           const e =
             err instanceof CliError
               ? err
-              : new CliError("E_INTERNAL", err instanceof Error ? err.message : String(err));
+              : (asCodedError(err) ??
+                new CliError("E_INTERNAL", err instanceof Error ? err.message : String(err)));
           writeResult(ctx, {
             ok: false,
             error: { code: e.code, message: e.message, details: e.details },
