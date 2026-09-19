@@ -17,7 +17,7 @@ common-cli 的业务能力以插件形式接入。按本指南新建一个插件
        {
          name: "hello",
          description: "问候",
-         options: [{ flags: "--name <name>", description: "要问候的对象" }],
+         options: [{ flags: "--name <name>", description: "要问候的对象（默认 world）" }],
          handler: (_ctx, args) => ({ message: `hello, ${args.name ?? "world"}!` }),
        },
      ],
@@ -45,7 +45,14 @@ common-cli 的业务能力以插件形式接入。按本指南新建一个插件
 ## handler 契约（硬约束）
 
 - **只 return 数据**：返回值会成为 JSON 包络的 `data` 字段（human 模式下打印为文本）。
-- **报错就 throw**：可 `throw` 任意 Error；推荐 throw 带错误码的 CliError（从 `common-cli` 包导入，或用普通 Error——壳会包装为 `E_INTERNAL`）。
+- **报错就 throw**：插件是纯 `.mjs`，无法 import 壳的 `CliError`，按**鸭子类型**携带已登记错误码抛出即可，壳会自动识别并归入对应退出码：
+  ```js
+  throw Object.assign(new Error("缺少 SUNO_API_KEY"), {
+    code: "E_CONFIG",            // 必须是 spec 输出 errorCodes 里已登记的码
+    details: { var: "SUNO_API_KEY" }, // 可选，会出现在 JSON 包络 error.details
+  });
+  ```
+  常用业务语义码：`E_CONFIG`（配置缺失/非法）、`E_MISSING_DEPENDENCY`（外部二进制缺失，`details` 带安装提示）、`E_PROVIDER_ERROR`（外部提供方执行失败）。未登记的码或不带码的 Error 一律按 `E_INTERNAL` 处理（退出码 3）。
 - **不要**直接写 stdout/stderr、不要调用 `process.exit`、不要调用任何交互式 prompt（AI/脚本调用会挂起）。输出一律由壳写入，这是人/AI 双契约的保证。
 - `ctx` 提供 `logger`（stderr 日志）、`warnings`（结构化警告收集）、`json/quiet/verbose` 等运行旗标与 `cwd`。
 - `args` 是已解析的选项键值对（如上例 `args.name`）；不需要 `ctx` 时形参写作 `_ctx`。

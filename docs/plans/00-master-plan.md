@@ -98,6 +98,9 @@
 | E_PLUGIN_LOAD_FAILED | 插件导入/执行失败 | 0 | warning |
 | E_PLUGIN_COMMAND_CONFLICT | 插件命令与已有命令重名 | 0 | warning（跳过该命令） |
 | E_PLUGIN_DUPLICATE | 同名插件重复发现 | 0 | warning（跳过低优先级插件） |
+| E_CONFIG | 配置缺失/非法（key 无效、池长度不等、whisper 模型缺失） | 3 | error |
+| E_MISSING_DEPENDENCY | 外部二进制缺失（ffmpeg/ffprobe/whisper.cpp，details 带安装提示） | 3 | error |
+| E_PROVIDER_ERROR | 外部提供方执行失败（远端 API 非 2xx、本地进程失败） | 3 | error |
 
 ### 4.5 退出码表（不可改，只可新增）
 

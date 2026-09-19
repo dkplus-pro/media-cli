@@ -34,7 +34,7 @@
     "pre-commit": "pnpm lint-staged"
   },
   "lint-staged": {
-    "*.{ts,js,mjs,json,md}": "biome check --write"
+    "*.{ts,js,mjs,json}": "biome check --write"
   },
   "dependencies": {
     "commander": "^15.0.0"
