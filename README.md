@@ -49,3 +49,22 @@ node dist/common-cli.js --json media-transcribe --input 音频.mp3 --output out.
 | `WHISPER_MODEL` | ggml 模型路径（transcribe 必填，缺失报 `E_CONFIG`） |
 
 依赖安装：`brew install ffmpeg`；whisper.cpp 用 `brew install whisper-cpp` 并下载 ggml 模型（base/small/medium）。ffmpeg 未编译 drawtext 时胶片图自动降级为无时间戳并附结构化警告。
+
+### azure-image（Azure gpt-image-2 生图）
+
+```bash
+export AZURE_IMAGE_KEY_POOL="key1,key2"
+export AZURE_IMAGE_ENDPOINT_POOL="https://res-a.cognitiveservices.azure.com,https://res-b.cognitiveservices.azure.com"
+node dist/common-cli.js --json image-gen --prompt "一只红苹果" --output apple.png          # 纯文案
+node dist/common-cli.js --json image-gen --prompt "改成水彩风" --ref apple.png --output wc.png   # 参考图（edits）
+```
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `AZURE_IMAGE_KEY_POOL` / `AZURE_IMAGE_ENDPOINT_POOL` | 必填 | 英文逗号分隔，**按索引一一配对**，长度不等报 `E_CONFIG` |
+| `AZURE_IMAGE_DEPLOYMENT` | `gpt-image-2` | 部署名 |
+| `AZURE_IMAGE_OUTPUT_FORMAT` | `png` | png/jpeg/webp |
+| `AZURE_IMAGE_QUALITY` | `auto` | auto/low/medium/high |
+| `AZURE_IMAGE_API_VERSION` | `2025-04-01-preview` | gpt-image-2 若要求更新版本，设此变量即可 |
+
+调度策略：每次请求随机选一个账号发起，401/403/429/5xx 自动轮换下一账号重试，全池失败报 `E_PROVIDER_ERROR`；400 类参数错误不轮换。任何输出都不含 key。
