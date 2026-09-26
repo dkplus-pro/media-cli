@@ -38,6 +38,7 @@
 | D15 | 抠图边距 | 默认裁剪到主体包围盒 + `--padding`（默认 32px，clamp 画布）；`--no-crop` 保留原始画布 | 用户原话「仅保留主体，主体周围留一点边距」 |
 | D16 | 抠图批量 | 文件夹输入：一级遍历 + `--recursive`（输出 mirror 相对结构）；jpg/jpeg/png/webp；单张失败 → `data.failed` 继续 | 可控性优先；与壳「单失败警告继续」精神一致 |
 | D17 | 抠图归属 | 新插件 `media-cutout`，命令 `media-cutout` | media-* 前缀=本地系，不沾 ffmpeg 系与云系 |
+| D18 | Agent Skill | 每个面向 AI 的 CLI 能力必须有对应 SKILL.md（`skills/<name>/SKILL.md`，随 npm 包分发 + GitHub 仓库制供 `npx skills add`）；skill 负责触发与隐性知识（env 前置、坑位），运行时契约以 `spec` 为唯一事实源；**新增 CLI 能力必须同步 skill**（AGENTS.md §6/§8 已固化） | spec 解决「AI 怎么知道有哪些命令」，skill 解决「AI 什么时候想到用它」；已发布 0.1.0 后补齐（阶段 06 后续） |
 
 ## 3. 命令契约
 

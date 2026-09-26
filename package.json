@@ -32,7 +32,8 @@
   },
   "files": [
     "dist",
-    "plugins"
+    "plugins",
+    "skills"
   ],
   "publishConfig": {
     "access": "public"

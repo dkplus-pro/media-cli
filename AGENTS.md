@@ -60,6 +60,7 @@ tests/          unit/（直接 import src）+ e2e/（spawn dist 真进程）+ fi
 
 - **单文件超过 300 行必须拆分**：拆成「主入口 + 模块」；主入口只做组织与再导出。
 - 新命令必须走 `src/commands/registry.ts` 的声明式定义（含内置命令），禁止绕过注册器手工 `addCommand`。
+- **Skill 同步规范**：新增或变更插件命令（CLI 能力）时，必须同步更新 `skills/<skill-name>/SKILL.md`——`description` 埋触发词（用户意图词，中英混合），正文维护命令速查、env 前置与坑位清单；skill 只做发现与触发，运行时契约以 `spec` 输出为准（SKILL.md 必须含此兜底声明）。发布渠道：GitHub 仓库制（`npx skills add <owner>/<repo>`），SKILL.md 随 npm 包 `files` 分发。
 - 新错误码必须同步登记 `src/core/errors.ts` 并更新 `docs/plans/00-master-plan.md` 的错误码表。
 - `pnpm lint && pnpm build && pnpm test` 全绿才算完成；e2e 测试必须 spawn `dist` 真进程验证契约。
 - 提交信息格式：`phase-NN: 摘要`（架构/文档类用 `docs:`/`chore:` 前缀）。
@@ -78,6 +79,7 @@ tests/          unit/（直接 import src）+ e2e/（spawn dist 真进程）+ fi
 - [ ] 分层依赖是否合规（上层→下层，无反向/跨层）？
 - [ ] 是否有文件超过 300 行未拆分？
 - [ ] 新命令是否走声明式注册器？新错误码是否已登记？
+- [ ] 新增/变更 CLI 命令是否已同步 `skills/` 下对应 SKILL.md（触发 description + 速查表 + 坑位）？
 - [ ] 是否存在任何交互式 prompt 调用？
 - [ ] 新功能是否有对应测试（unit 或 e2e）？
 - [ ] 文档是否需要同步（`AGENTS.md` / `docs/plans/00-master-plan.md` / `docs/plugin-development.md` / `README.md`）？
