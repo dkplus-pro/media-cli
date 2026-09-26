@@ -25,7 +25,7 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 | 提取音轨/视频转音频 | `media-to-audio` | `--input` `--format mp3\|m4a\|wav\|flac\|ogg` `--bitrate <rate=192k>` |
 | 音/视频转字幕 SRT | `media-transcribe` | `--input` `--output` `--language` `--model-path`（默认取 WHISPER_MODEL） |
 | 文生图 | `image-gen --prompt <文案>` | `--size 1024x1024` `--output` `--quality` |
-| 参考图+文案改图/生图 | `image-gen --prompt ... --ref <图1> <图2>` | 多张参考图走 edits 端点 |
+| 参考图+文案改图/生图 | `image-gen --prompt ... --ref <图1> <图2>` | 多张参考图走 edits 端点；仅 jpg/jpeg/png/webp |
 | 文生音乐/配乐/BGM | `suno-gen` | `--prompt <灵感>` **或** `--lyrics <歌词>`（二选一，互斥）；`--tags` `--title` `--instrumental` `--model` |
 | 文生音效 | `suno-sound --text <描述>` | `--tags` `--loop` `--model chirp-crow\|chirp-fenix` |
 | 查任务/补下载/查余额 | `suno-task --id` / `suno-download --id --output` / `suno-balance` | 恢复超时任务用 |
@@ -45,5 +45,7 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 - `suno-gen`/`suno-sound` 默认**阻塞轮询直到完成并自动下载**（音频链接限时 1 小时，无需手动转存）；Suno 每次生成 **2 首**，批量语义见 `data.tracks[]` 与 `data.failed[]`；`--no-wait` 只提交返回 `{ taskIds }`；等待超时报 `E_PROVIDER_ERROR` 且 `details.taskIds` 可用 `suno-download --id` 恢复（积分已扣，务必恢复而不是重发）。
 - `media-cutout` 文件夹批量：部分失败不中断，检查 `data.failed[]`（file + reason）；全失败才报错。
 - `image-gen` 多账号池自动轮换重试（401/403/429/5xx），无需调用方处理；400 类参数错误不轮换直接报 `E_PROVIDER_ERROR`。
+- `image-gen --ref` 按扩展名推断 mimetype 传给 Azure，仅支持 jpg/jpeg/png/webp；其他格式（heic、bin 等）本地即报 `E_INVALID_OPTION`（退出码 2），不发请求。HEIC 先转 jpg 再喂。
+- `image-gen --size` 非标比例可直接传对应 WxH，不限于 1024/1536 三档（如 4:3 传 `1536x1152` 实测可出图）。
 - 胶片图适合喂给多模态模型理解视频：一张图 16 帧、带 `mm:ss` 时间戳，可直接引用「00:42 处」。
 - 错误码语义：`E_CONFIG` 配置缺失/非法 → 检查 env；`E_MISSING_DEPENDENCY` 外部二进制缺失 → `details.hint` 有安装提示；`E_PROVIDER_ERROR` 远端/进程失败 → `details.source` 标明来源（ffmpeg/whisper/vision/azure/suno）。

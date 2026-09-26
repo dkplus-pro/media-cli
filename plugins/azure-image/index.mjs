@@ -6,6 +6,13 @@ import { cliError } from "./lib/errors.mjs";
 
 const SIZE_RE = /^\d{3,4}x\d{3,4}$/;
 const QUALITIES = ["auto", "low", "medium", "high"];
+// Azure edits 端点仅接受 image/jpeg、image/png、image/webp
+const MIME_BY_EXT = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+};
 
 async function imageGen(ctx, args) {
   if (typeof args.prompt !== "string" || args.prompt.trim() === "") {
@@ -27,7 +34,15 @@ async function imageGen(ctx, args) {
         value: refPath,
       });
     }
-    refs.push({ data: await readFile(refPath), name: path.basename(refPath) });
+    const ext = path.extname(refPath).toLowerCase();
+    const mime = MIME_BY_EXT[ext];
+    if (mime === undefined) {
+      throw cliError("E_INVALID_OPTION", `参考图格式不支持：${refPath}（仅 jpg/jpeg/png/webp）`, {
+        option: "--ref",
+        value: refPath,
+      });
+    }
+    refs.push({ data: await readFile(refPath), name: path.basename(refPath), mime });
   }
 
   // 配置校验必须先于任何网络请求

@@ -22,7 +22,7 @@ function buildRequest(config, { prompt, size, quality, refs }) {
   if (refs.length > 0) {
     const form = new FormData();
     for (const ref of refs) {
-      form.append("image[]", new Blob([ref.data], { type: "application/octet-stream" }), ref.name);
+      form.append("image[]", new Blob([ref.data], { type: ref.mime }), ref.name);
     }
     form.append("prompt", prompt);
     form.append("size", size);

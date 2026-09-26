@@ -115,6 +115,7 @@ function azureEnv(endpoint: string, keys: string): Record<string, string> {
 interface MultipartPart {
   name: string;
   filename?: string;
+  contentType?: string;
   data: Buffer;
 }
 
@@ -126,7 +127,8 @@ function parseMultipart(body: Buffer, boundary: string): MultipartPart[] {
     const payload = part.slice(headerEnd + 4).replace(/\r\n$/, "");
     const name = /name="([^"]+)"/.exec(headers)?.[1] ?? "";
     const filename = /filename="([^"]+)"/.exec(headers)?.[1];
-    return { name, filename, data: Buffer.from(payload, "latin1") };
+    const contentType = /content-type: ([^\r\n]+)/i.exec(headers)?.[1]?.trim();
+    return { name, filename, contentType, data: Buffer.from(payload, "latin1") };
   });
 }
 
@@ -184,13 +186,13 @@ describe("azure-image e2e（本地 mock）", () => {
     }
   });
 
-  it("参考图 edits 成功：multipart 含 image[] 字节与文本字段", async () => {
+  it("参考图 edits 成功：multipart 含 image[] 字节、mimetype 与文本字段", async () => {
     const mock = await startMock(() => okBody("edited"));
     try {
-      const refA = path.join(dir, "ref-a.bin");
-      const refB = path.join(dir, "ref-b.bin");
-      const REF_A = Buffer.from([1, 2, 3, 4, 5]);
-      const REF_B = Buffer.from([9, 8, 7]);
+      const refA = path.join(dir, "ref-a.png");
+      const refB = path.join(dir, "ref-b.jpg");
+      const REF_A = Buffer.concat([PNG_BYTES, Buffer.from([5, 6])]);
+      const REF_B = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 8, 7]);
       await writeFile(refA, REF_A);
       await writeFile(refB, REF_B);
       const out = path.join(dir, "edit.png");
@@ -211,8 +213,30 @@ describe("azure-image e2e（本地 mock）", () => {
       expect(images).toHaveLength(2);
       expect(images[0].data.equals(REF_A)).toBe(true);
       expect(images[1].data.equals(REF_B)).toBe(true);
+      // mimetype 按扩展名推断，Azure 拒绝 application/octet-stream
+      expect(images[0].contentType).toBe("image/png");
+      expect(images[1].contentType).toBe("image/jpeg");
       expect(parts.find((p) => p.name === "prompt")?.data.toString()).toBe("with refs");
       expect(parts.find((p) => p.name === "output_format")?.data.toString()).toBe("png");
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("参考图扩展名不支持 → E_INVALID_OPTION 且不发请求", async () => {
+    const mock = await startMock(() => okBody("never"));
+    try {
+      const ref = path.join(dir, "ref.heic");
+      await writeFile(ref, Buffer.from([1, 2, 3]));
+      const r = await cli(
+        ["--json", "image-gen", "--prompt", "x", "--ref", ref],
+        azureEnv(mock.endpoint, "secret-key-one"),
+      );
+      expect(r.code).toBe(2);
+      const parsed = JSON.parse(r.stdout) as { error: { code: string; message: string } };
+      expect(parsed.error.code).toBe("E_INVALID_OPTION");
+      expect(parsed.error.message).toContain("ref.heic");
+      expect(Object.values(mock.hits).reduce((a, b) => a + b, 0)).toBe(0);
     } finally {
       await mock.close();
     }
