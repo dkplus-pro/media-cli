@@ -1,10 +1,10 @@
 # 插件开发指南
 
-common-cli 的业务能力以插件形式接入。按本指南新建一个插件**不需要读壳的源码**。
+media-cli 的业务能力以插件形式接入。按本指南新建一个插件**不需要读壳的源码**。
 
 ## 30 秒上手
 
-1. 在项目 `plugins/` 目录（或全局 `~/.common-cli/plugins/`）下建一个子目录，目录名任意：
+1. 在项目 `plugins/` 目录（或全局 `~/.media-cli/plugins/`）下建一个子目录，目录名任意：
    ```
    plugins/hello/index.mjs
    ```
@@ -25,9 +25,9 @@ common-cli 的业务能力以插件形式接入。按本指南新建一个插件
    ```
 3. 跑起来：
    ```bash
-   node dist/common-cli.js --json hello --name AI
+   node dist/media-cli.js --json hello --name AI
    # {"ok":true,"data":{"message":"hello, AI!"},"warnings":[]}
-   node dist/common-cli.js --json spec   # 新命令会出现在自省结果里
+   node dist/media-cli.js --json spec   # 新命令会出现在自省结果里
    ```
 
 ## manifest 字段
@@ -59,11 +59,11 @@ common-cli 的业务能力以插件形式接入。按本指南新建一个插件
 
 ## 本地调试
 
-- `COMMON_CLI_PLUGINS_DIR`（`:` 分隔）每一项即**单个插件目录**，优先级最高，适合指向任意实验目录：
+- `MEDIA_CLI_PLUGINS_DIR`（`:` 分隔）每一项即**单个插件目录**，优先级最高，适合指向任意实验目录：
   ```bash
-  COMMON_CLI_PLUGINS_DIR=/tmp/my-plugin node dist/common-cli.js --json my-cmd
+  MEDIA_CLI_PLUGINS_DIR=/tmp/my-plugin node dist/media-cli.js --json my-cmd
   ```
-- 项目 `./plugins/`、全局 `~/.common-cli/plugins/` 与**随包内置**（`<包根>/plugins/`，npm 发布用）是**容器目录**（一级子目录 = 插件），优先级依次降低。
+- 项目 `./plugins/`、全局 `~/.media-cli/plugins/` 与**随包内置**（`<包根>/plugins/`，npm 发布用）是**容器目录**（一级子目录 = 插件），优先级依次降低。
 
 ## 校验与常见警告
 
@@ -91,4 +91,4 @@ manifest 不合规不会让 CLI 崩溃，只会产生**结构化警告**（`--js
 3. **env 前置表**：新命令依赖的环境变量/外部二进制，标注缺失时的报错码。
 4. **坑位清单**：批量语义、限时链接、互斥参数、平台限制等无法从 `spec` 推出的隐性知识。
 
-skill 只负责「让 AI 想到你」与隐性知识传递；运行时契约（命令树、选项、错误码）以 `common-cli --json spec` 为唯一事实源，SKILL.md 必须保留此兜底声明，避免文档漂移误导 agent。
+skill 只负责「让 AI 想到你」与隐性知识传递；运行时契约（命令树、选项、错误码）以 `media-cli --json spec` 为唯一事实源，SKILL.md 必须保留此兜底声明，避免文档漂移误导 agent。

@@ -85,7 +85,7 @@ export async function resolveCutoutBin(env = process.env) {
     .slice(0, 8);
   const cachePath = path.join(
     homedir(),
-    ".common-cli",
+    ".media-cli",
     "cache",
     "media-cutout",
     `vision-cutout-${sourceHash}`,

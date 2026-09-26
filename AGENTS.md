@@ -1,11 +1,11 @@
-# AGENTS.md — common-cli 架构约束（人与 AI 协作者必读）
+# AGENTS.md — media-cli 架构约束（人与 AI 协作者必读）
 
 本文件是**硬约束**。任何改动（无论人还是 agent）提交前必须逐条对照文末「变更检查清单」。
 方案全文见 `docs/plans/00-master-plan.md`，各阶段执行细节见 `docs/plans/01`–`05`。
 
 ## 1. 项目定位
 
-通用 Node CLI 壳（包名 `common-cli`，命令名 `common-cli`），同时服务人类用户与 AI agent。
+通用 Node CLI 壳（npm 包名 `@dkplus/media-cli`，命令名 `media-cli`），同时服务人类用户与 AI agent。
 **本仓库不含具体业务功能**；业务能力一律以插件形式接入（见 §5 插件契约）。
 
 ## 2. 技术底座（不可擅自更改）
@@ -49,7 +49,7 @@ tests/          unit/（直接 import src）+ e2e/（spawn dist 真进程）+ fi
 
 ## 5. 插件契约
 
-- 位置与优先级：环境变量 `COMMON_CLI_PLUGINS_DIR`（`:` 分隔，测试用）> 项目 `./plugins/` > 全局 `~/.common-cli/plugins/` > 随包内置（包内 `plugins/`，npm 发布用）；同名插件按此顺序先到先得，后者跳过并警告。
+- 位置与优先级：环境变量 `MEDIA_CLI_PLUGINS_DIR`（`:` 分隔，测试用）> 项目 `./plugins/` > 全局 `~/.media-cli/plugins/` > 随包内置（包内 `plugins/`，npm 发布用）；同名插件按此顺序先到先得，后者跳过并警告。
 - 形态：每个插件一个目录，入口 `index.mjs`（ESM），默认导出声明式 manifest：
   `{ name, version, commands: [{ name, description, options?, handler }] }`。
 - 校验：手写校验（`src/plugins/manifest.ts`），不引入第三方 schema 库。

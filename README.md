@@ -1,4 +1,4 @@
-# common-cli
+# media-cli
 
 通用 Node CLI 壳：给人用，也给 AI 用。本仓库不含具体业务功能，业务能力以**插件**形式接入（见 [插件开发指南](docs/plugin-development.md)）。
 
@@ -10,8 +10,8 @@
 
 ```bash
 npm i -g @dkplus/media-cli    # 全局安装（自带全部内置插件）
-common-cli --help
-common-cli --json spec        # AI 自省：完整命令树 JSON
+media-cli --help
+media-cli --json spec        # AI 自省：完整命令树 JSON
 ```
 
 本地开发：
@@ -19,12 +19,12 @@ common-cli --json spec        # AI 自省：完整命令树 JSON
 ```bash
 pnpm install
 pnpm build
-node dist/common-cli.js --help        # 人类友好帮助
-node dist/common-cli.js --json spec   # AI 自省：完整命令树 JSON
-node dist/common-cli.js --json hello --name AI   # 示例插件命令
+node dist/media-cli.js --help        # 人类友好帮助
+node dist/media-cli.js --json spec   # AI 自省：完整命令树 JSON
+node dist/media-cli.js --json hello --name AI   # 示例插件命令
 ```
 
-插件发现优先级：`COMMON_CLI_PLUGINS_DIR` > 项目 `./plugins/` > 全局 `~/.common-cli/plugins/` > **随包内置**（同名先到先得，可用同名插件覆盖内置版本）。
+插件发现优先级：`MEDIA_CLI_PLUGINS_DIR` > 项目 `./plugins/` > 全局 `~/.media-cli/plugins/` > **随包内置**（同名先到先得，可用同名插件覆盖内置版本）。
 
 ## 人/AI 双契约（摘要）
 
@@ -46,10 +46,10 @@ pnpm lint && pnpm test       # Biome + Vitest（e2e spawn dist 真进程）
 ### media-av（本地音视频转化，依赖 ffmpeg/whisper.cpp）
 
 ```bash
-node dist/common-cli.js --json media-filmstrip --input 视频.mp4 --output grid.jpg
+node dist/media-cli.js --json media-filmstrip --input 视频.mp4 --output grid.jpg
 #   4×4 十六格拼图，每格带时间戳——一张图让 AI 了解视频内容
-node dist/common-cli.js --json media-to-audio --input 视频.mp4 --format m4a
-node dist/common-cli.js --json media-transcribe --input 音频.mp3 --output out.srt   # 需 whisper.cpp
+node dist/media-cli.js --json media-to-audio --input 视频.mp4 --format m4a
+node dist/media-cli.js --json media-transcribe --input 音频.mp3 --output out.srt   # 需 whisper.cpp
 ```
 
 | 环境变量 | 说明 |
@@ -65,8 +65,8 @@ node dist/common-cli.js --json media-transcribe --input 音频.mp3 --output out.
 ```bash
 export AZURE_IMAGE_KEY_POOL="key1,key2"
 export AZURE_IMAGE_ENDPOINT_POOL="https://res-a.cognitiveservices.azure.com,https://res-b.cognitiveservices.azure.com"
-node dist/common-cli.js --json image-gen --prompt "一只红苹果" --output apple.png          # 纯文案
-node dist/common-cli.js --json image-gen --prompt "改成水彩风" --ref apple.png --output wc.png   # 参考图（edits）
+node dist/media-cli.js --json image-gen --prompt "一只红苹果" --output apple.png          # 纯文案
+node dist/media-cli.js --json image-gen --prompt "改成水彩风" --ref apple.png --output wc.png   # 参考图（edits）
 ```
 
 | 环境变量 | 默认 | 说明 |
@@ -82,24 +82,24 @@ node dist/common-cli.js --json image-gen --prompt "改成水彩风" --ref apple.
 ### media-cutout（本地抠图，macOS 14+）
 
 ```bash
-node dist/common-cli.js --json media-cutout --input photo.jpg --output cut.png      # 单文件：透明 PNG，裁剪到主体+32px 边距
-node dist/common-cli.js --json media-cutout --input 图册/ --output cutout/           # 文件夹批量（一级）
-node dist/common-cli.js --json media-cutout --input 图册/ --recursive                # 递归子目录，输出 mirror 目录结构
-node dist/common-cli.js --json media-cutout --input photo.jpg --no-crop              # 不裁剪，保留原始画布
+node dist/media-cli.js --json media-cutout --input photo.jpg --output cut.png      # 单文件：透明 PNG，裁剪到主体+32px 边距
+node dist/media-cli.js --json media-cutout --input 图册/ --output cutout/           # 文件夹批量（一级）
+node dist/media-cli.js --json media-cutout --input 图册/ --recursive                # 递归子目录，输出 mirror 目录结构
+node dist/media-cli.js --json media-cutout --input photo.jpg --no-crop              # 不裁剪，保留原始画布
 ```
 
-引擎为 Apple Vision framework（与系统「拷贝主体」同款分割，ANE 加速单张约 0.2s）。首次运行用 `swiftc` 自动编译工具并缓存到 `~/.common-cli/cache/media-cutout/`（源码变更自动重编译；`CUTOUT_BIN` 可指向现成二进制跳过编译）。仅支持 macOS 14+，其他平台报 `E_MISSING_DEPENDENCY`。支持 jpg/jpeg/png/webp；文件夹批量时单张失败不影响其余（失败项记入 `data.failed`）。
+引擎为 Apple Vision framework（与系统「拷贝主体」同款分割，ANE 加速单张约 0.2s）。首次运行用 `swiftc` 自动编译工具并缓存到 `~/.media-cli/cache/media-cutout/`（源码变更自动重编译；`CUTOUT_BIN` 可指向现成二进制跳过编译）。仅支持 macOS 14+，其他平台报 `E_MISSING_DEPENDENCY`。支持 jpg/jpeg/png/webp；文件夹批量时单张失败不影响其余（失败项记入 `data.failed`）。
 
 ### suno-music（文生音乐 / 文生音效，open.suno.cn）
 
 ```bash
 export SUNO_API_KEY="你的密钥"
-node dist/common-cli.js --json suno-gen --prompt "lo-fi hip hop" --output song.mp3    # 灵感模式（每次生成 2 首，落盘为 song-1/-2.mp3）
-node dist/common-cli.js --json suno-gen --lyrics "歌词..." --tags "pop" --instrumental  # 自定义歌词模式
-node dist/common-cli.js --json suno-sound --text "雷雨声" --loop --output rain.mp3     # 文生音效
-node dist/common-cli.js --json suno-gen --prompt "..." --no-wait                       # 只提交，返回 taskIds
-node dist/common-cli.js --json suno-task --id 204 && node dist/common-cli.js --json suno-download --id 204 --output s.mp3
-node dist/common-cli.js --json suno-balance                                            # 查积分
+node dist/media-cli.js --json suno-gen --prompt "lo-fi hip hop" --output song.mp3    # 灵感模式（每次生成 2 首，落盘为 song-1/-2.mp3）
+node dist/media-cli.js --json suno-gen --lyrics "歌词..." --tags "pop" --instrumental  # 自定义歌词模式
+node dist/media-cli.js --json suno-sound --text "雷雨声" --loop --output rain.mp3     # 文生音效
+node dist/media-cli.js --json suno-gen --prompt "..." --no-wait                       # 只提交，返回 taskIds
+node dist/media-cli.js --json suno-task --id 204 && node dist/media-cli.js --json suno-download --id 204 --output s.mp3
+node dist/media-cli.js --json suno-balance                                            # 查积分
 ```
 
 默认阻塞轮询至完成并自动下载（`SUNO_TIMEOUT_MS` 默认 600000，超时的 `details.taskIds` 可用 `suno-download` 恢复，不浪费已扣积分）。音频链接限时 1 小时，完成即下载。`suno-gen` 模型默认 `chirp-hawk`；`suno-sound` 模型可选 `chirp-crow`/`chirp-fenix`。`SUNO_BASE_URL` 可指向本地 mock（e2e 即此方式）。

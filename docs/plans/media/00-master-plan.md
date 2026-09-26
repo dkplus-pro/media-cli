@@ -1,6 +1,6 @@
 # media 媒体业务方案（Master Plan）
 
-> 日期：2026-09-20。本文档是 media 业务能力的**方案记录与唯一事实源**。宿主是通用壳 `common-cli`（壳的方案见 `docs/plans/00-master-plan.md`，其阶段 01–05 已完成）：壳不含业务，media 能力全部以**项目级插件**接入。阶段执行细节见同目录 `01`–`04` 阶段文档。
+> 日期：2026-09-20。本文档是 media 业务能力的**方案记录与唯一事实源**。宿主是通用壳 `media-cli`（壳的方案见 `docs/plans/00-master-plan.md`，其阶段 01–05 已完成）：壳不含业务，media 能力全部以**项目级插件**接入。阶段执行细节见同目录 `01`–`04` 阶段文档。
 
 ## 1. 背景与定位
 
@@ -187,7 +187,7 @@ data：`{ "path": string, "bytes": number, "format": string, "size": string, "re
 ## 9. 全局验收标准（Definition of Done）
 
 - [ ] `pnpm lint && pnpm build && pnpm test` 全绿（Node >= 20）
-- [ ] `node dist/common-cli.js --json spec` 列出全部 9 个 media 命令（source 为 `plugin:<name>`）
+- [ ] `node dist/media-cli.js --json spec` 列出全部 9 个 media 命令（source 为 `plugin:<name>`）
 - [ ] 9 个命令的 `--json` 成功/失败包络均符合壳契约；新增 3 错误码已登记两处错误码表
 - [ ] e2e 全部通过 mock 服务器/本地 fixture 验证，不依赖真实 key 与外网
 - [ ] 根目录残留拷贝已删除，`./plugins/` 为真实容器目录且含 hello 与三业务插件

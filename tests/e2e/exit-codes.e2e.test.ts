@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
-const BIN = fileURLToPath(new URL("../../dist/common-cli.js", import.meta.url));
+const BIN = fileURLToPath(new URL("../../dist/media-cli.js", import.meta.url));
 const THROWER = fileURLToPath(new URL("../fixtures/plugins/thrower", import.meta.url));
 
 interface CliRun {
@@ -37,7 +37,7 @@ describe("退出码 e2e", () => {
   });
 
   it("命令执行错误退出 3（JSON 模式 stdout 包络、stderr 空）", async () => {
-    const r = await cli(["--json", "plugin-throw"], { COMMON_CLI_PLUGINS_DIR: THROWER });
+    const r = await cli(["--json", "plugin-throw"], { MEDIA_CLI_PLUGINS_DIR: THROWER });
     expect(r.code).toBe(3);
     expect(r.stderr).toBe("");
     const parsed = JSON.parse(r.stdout) as {
@@ -50,7 +50,7 @@ describe("退出码 e2e", () => {
   });
 
   it("命令执行错误退出 3（human 模式错误在 stderr）", async () => {
-    const r = await cli(["plugin-throw"], { COMMON_CLI_PLUGINS_DIR: THROWER });
+    const r = await cli(["plugin-throw"], { MEDIA_CLI_PLUGINS_DIR: THROWER });
     expect(r.code).toBe(3);
     expect(r.stdout).toBe("");
     expect(r.stderr).toContain("[error] [E_INTERNAL]");

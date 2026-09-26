@@ -1,7 +1,7 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/bin/common-cli.ts"],
+  entry: ["src/bin/media-cli.ts"],
   format: ["esm"],
   target: "node20",
   outDir: "dist",

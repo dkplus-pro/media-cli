@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
-const BIN = fileURLToPath(new URL("../../dist/common-cli.js", import.meta.url));
+const BIN = fileURLToPath(new URL("../../dist/media-cli.js", import.meta.url));
 
 interface CliRun {
   code: number;

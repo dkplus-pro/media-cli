@@ -1,10 +1,16 @@
 import { execFile } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
-const BIN = fileURLToPath(new URL("../../dist/common-cli.js", import.meta.url));
+const BIN = fileURLToPath(new URL("../../dist/media-cli.js", import.meta.url));
+const PKG_VERSION = (
+  JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as {
+    version: string;
+  }
+).version;
 
 interface CliRun {
   code: number;
@@ -48,7 +54,7 @@ describe("spec 自省 e2e", () => {
     const parsed = JSON.parse(r.stdout) as SpecEnvelope;
     expect(parsed.ok).toBe(true);
     expect(parsed.data?.name).toBe("@dkplus/media-cli");
-    expect(parsed.data?.version).toBe("0.1.0");
+    expect(parsed.data?.version).toBe(PKG_VERSION);
 
     const byName = new Map(parsed.data?.commands.map((c) => [c.name, c]));
     expect(byName.get("version")?.source).toBe("builtin");

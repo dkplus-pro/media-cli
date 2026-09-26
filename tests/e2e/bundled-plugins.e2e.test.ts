@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const execFileAsync = promisify(execFile);
-const DIST_BIN = fileURLToPath(new URL("../../dist/common-cli.js", import.meta.url));
+const DIST_BIN = fileURLToPath(new URL("../../dist/media-cli.js", import.meta.url));
 
 interface CliRun {
   code: number;
@@ -25,7 +25,7 @@ async function cli(bin: string, args: string[], cwd: string): Promise<CliRun> {
   }
 }
 
-// 模拟 npm 安装布局：<tmp>/pkg/dist/common-cli.js + <tmp>/pkg/plugins/<name>/index.mjs
+// 模拟 npm 安装布局：<tmp>/pkg/dist/media-cli.js + <tmp>/pkg/plugins/<name>/index.mjs
 // 并从包外目录（<tmp>/work）运行，验证「随包内置」发现源在真实安装形态下生效
 describe("bundled 插件发现（模拟安装布局）", () => {
   let root: string;
@@ -39,7 +39,7 @@ describe("bundled 插件发现（模拟安装布局）", () => {
     mkdirSync(path.join(pkg, "dist"), { recursive: true });
     mkdirSync(path.join(pkg, "plugins", "demo"), { recursive: true });
     mkdirSync(work, { recursive: true });
-    copyFileSync(DIST_BIN, path.join(pkg, "dist", "common-cli.js"));
+    copyFileSync(DIST_BIN, path.join(pkg, "dist", "media-cli.js"));
     // 真实安装的包根必有 package.json（bundled 发现靠它定位包根），且带 type: module
     writeFileSync(
       path.join(pkg, "package.json"),
@@ -74,7 +74,7 @@ describe("bundled 插件发现（模拟安装布局）", () => {
   });
 
   it("从包外任意目录运行，bundled 插件命令可用", async () => {
-    const r = await cli(path.join(pkg, "dist", "common-cli.js"), ["--json", "bundled-demo"], work);
+    const r = await cli(path.join(pkg, "dist", "media-cli.js"), ["--json", "bundled-demo"], work);
     expect(r.code).toBe(0);
     const parsed = JSON.parse(r.stdout) as {
       ok: boolean;
@@ -87,7 +87,7 @@ describe("bundled 插件发现（模拟安装布局）", () => {
   });
 
   it("spec 自省含 bundled 命令，source 为 plugin:demo", async () => {
-    const r = await cli(path.join(pkg, "dist", "common-cli.js"), ["--json", "spec"], work);
+    const r = await cli(path.join(pkg, "dist", "media-cli.js"), ["--json", "spec"], work);
     expect(r.code).toBe(0);
     const parsed = JSON.parse(r.stdout) as {
       data: { commands: { name: string; source: string }[] };

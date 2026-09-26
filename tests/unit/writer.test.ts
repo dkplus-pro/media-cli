@@ -30,7 +30,7 @@ const BASE_FLAGS: GlobalFlags = { json: false, quiet: false, verbose: false, col
 describe("writeResult (json mode)", () => {
   it("writes a single-line parseable success envelope to stdout", () => {
     const { ctx, stdout } = setup({ ...BASE_FLAGS, json: true });
-    writeResult(ctx, { ok: true, data: { name: "common-cli", version: "0.1.0" } });
+    writeResult(ctx, { ok: true, data: { name: "media-cli", version: "0.1.0" } });
 
     const text = stdout.text;
     expect(text.endsWith("\n")).toBe(true);
@@ -39,7 +39,7 @@ describe("writeResult (json mode)", () => {
     const parsed = JSON.parse(text) as { ok: boolean; data: unknown; warnings: unknown[] };
     expect(parsed).toEqual({
       ok: true,
-      data: { name: "common-cli", version: "0.1.0" },
+      data: { name: "media-cli", version: "0.1.0" },
       warnings: [],
     });
   });
@@ -75,7 +75,7 @@ describe("writeResult (json mode)", () => {
 describe("writeResult (human mode)", () => {
   it("writes object data to stdout as two-space indented JSON", () => {
     const { ctx, stdout, stderr } = setup(BASE_FLAGS);
-    const data = { name: "common-cli", nested: { a: 1 } };
+    const data = { name: "media-cli", nested: { a: 1 } };
     writeResult(ctx, { ok: true, data });
 
     expect(stdout.text).toBe(`${JSON.stringify(data, null, 2)}\n`);

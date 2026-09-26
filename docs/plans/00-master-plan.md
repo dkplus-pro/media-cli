@@ -1,4 +1,4 @@
-# common-cli 总体方案（Master Plan）
+# media-cli 总体方案（Master Plan）
 
 > 日期：2026-09-20。本文档是项目的**方案记录与唯一事实源**：所有架构决策在此登记，阶段执行细节见同目录 `01`–`05` 阶段文档。架构硬约束的精简版在仓库根 `AGENTS.md`。
 
@@ -26,6 +26,7 @@
 | D12 | 架构约束 | `AGENTS.md` 硬约束 + 变更检查清单；单文件 > 300 行拆分 | 约束 agent 后续改动仍守架构 |
 | D13 | 质量工具 | Biome、Vitest、simple-git-hooks + lint-staged | 依赖少、速度快 |
 | D14 | 执行编排 | 阶段串行 + 阶段内并行（planner 编排，2 个 coding-agent 执行） | 依赖清晰，冲突最少 |
+| D15 | 命名（2026-09-26） | 命令名随发布物更名：`common-cli` → `media-cli`（bin、入口 `src/bin/media-cli.ts`、env `MEDIA_CLI_PLUGINS_DIR`、全局目录 `~/.media-cli/` 同步更名）。v0.1.0 尚未发布，无兼容负担，不做旧名兼容 | 命令名此前为通用壳名 `common-cli`，与 npm 包名 `@dkplus/media-cli` 割裂，用户与 AI 调用时易混淆；首个发布物即 media 插件集，壳名跟随产品，业务区分仍由命令前缀（D8）承担。历史阶段文档（01–05）保留旧名作为当时记录，不回改 |
 
 ## 3. 架构总览
 
@@ -33,7 +34,7 @@
                     argv
                      │
   ┌──────────────────▼───────────────────┐
-  │ src/bin/common-cli.ts (唯一入口)      │
+  │ src/bin/media-cli.ts (唯一入口)       │
   └──────────────────┬───────────────────┘
   ┌──────────────────▼───────────────────┐
   │ src/cli/  装配层                      │
@@ -114,12 +115,12 @@
 
 ### 5.1 发现顺序（先到先得）
 
-1. `COMMON_CLI_PLUGINS_DIR`（`:` 分隔，测试与高级用法）
+1. `MEDIA_CLI_PLUGINS_DIR`（`:` 分隔，测试与高级用法）
 2. 项目 `./plugins/`（仅当存在）
-3. 全局 `~/.common-cli/plugins/`
+3. 全局 `~/.media-cli/plugins/`
 4. 随包内置 `<包根>/plugins/`（npm 发布用；按 CLI 模块位置向上找 package.json 定位包根；与项目目录相同时跳过）
 
-语义：`COMMON_CLI_PLUGINS_DIR` 的每一项即**单个插件目录**（入口 `index.mjs`）；项目与全局路径是**容器目录**，其一级子目录为插件目录。
+语义：`MEDIA_CLI_PLUGINS_DIR` 的每一项即**单个插件目录**（入口 `index.mjs`）；项目与全局路径是**容器目录**，其一级子目录为插件目录。
 
 同名插件（manifest.name 重复）：高优先级来源胜出，低优先级跳过并警告 `E_PLUGIN_DUPLICATE`。
 
@@ -168,7 +169,7 @@ export default {
 ## 8. 全局验收标准（Definition of Done）
 
 - [ ] `pnpm install && pnpm lint && pnpm build && pnpm test` 全绿（Node >= 20）
-- [ ] `node dist/common-cli.js --version` / `version` / `spec` / `hello` 输出符合本契约
+- [ ] `node dist/media-cli.js --version` / `version` / `spec` / `hello` 输出符合本契约
 - [ ] e2e 覆盖：双模式输出、JSON 包络可解析、错误码与退出码、插件容错（坏插件只警告）
 - [ ] `AGENTS.md` 每条约束都有对应实现与测试
 - [ ] git 历史按阶段清晰提交，最终 push 到 `origin/main`

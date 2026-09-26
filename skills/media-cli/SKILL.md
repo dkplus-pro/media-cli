@@ -1,6 +1,6 @@
 ---
 name: media-cli
-description: 媒体处理 CLI（@dkplus/media-cli，命令名 common-cli）：抠图/去背景/透明 PNG/主体提取（media-cutout，macOS Vision）、视频转胶片图/16 帧拼图/视频帧理解（media-filmstrip）、视频转音频/提取音轨（media-to-audio）、音视频转字幕/SRT（media-transcribe，whisper.cpp）、AI 生图/文生图/参考图改图（image-gen，Azure gpt-image-2）、AI 音乐生成/配乐/BGM/音效（suno-gen/suno-sound，Suno）。给人用也给 AI 用：所有命令支持 --json 机器可读输出。用户要求处理图片/视频/音频、生成图像或音乐、提取字幕或音轨时使用本 skill。
+description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠图/去背景/透明 PNG/主体提取（media-cutout，macOS Vision）、视频转胶片图/16 帧拼图/视频帧理解（media-filmstrip）、视频转音频/提取音轨（media-to-audio）、音视频转字幕/SRT（media-transcribe，whisper.cpp）、AI 生图/文生图/参考图改图（image-gen，Azure gpt-image-2）、AI 音乐生成/配乐/BGM/音效（suno-gen/suno-sound，Suno）。给人用也给 AI 用：所有命令支持 --json 机器可读输出。用户要求处理图片/视频/音频、生成图像或音乐、提取字幕或音轨时使用本 skill。
 ---
 
 # media-cli（@dkplus/media-cli）
@@ -13,7 +13,7 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 common-cli）：�
   - 成功：`{ "ok": true, "data": ..., "warnings": [...] }`
   - 失败：`{ "ok": false, "error": { "code", "message", "details" } }`
 - 退出码：`0` 成功；`2` 用法错（E_MISSING_ARGUMENT / E_INVALID_OPTION）；`3` 执行错（E_CONFIG / E_MISSING_DEPENDENCY / E_PROVIDER_ERROR 等）。
-- **兜底**：本文档可能滞后，用 `common-cli --json spec` 获取当前版本的完整命令树（name/options/source）——以 spec 为准。
+- **兜底**：本文档可能滞后，用 `media-cli --json spec` 获取当前版本的完整命令树（name/options/source）——以 spec 为准。
 - 非交互：永远不会挂起等待输入；缺必填参数会直接报 E_MISSING_ARGUMENT，不会 prompt。
 
 ## 命令速查（按意图）

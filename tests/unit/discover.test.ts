@@ -37,7 +37,7 @@ describe("discoverPluginDirs", () => {
 
     const candidates = discoverPluginDirs(
       cwd,
-      { COMMON_CLI_PLUGINS_DIR: `a:${path.join(root, "b")}` },
+      { MEDIA_CLI_PLUGINS_DIR: `a:${path.join(root, "b")}` },
       { globalRoot: NOPE(root), bundledRoot: NOPE(root) },
     );
 

@@ -16,7 +16,7 @@ function containerPluginDirs(container: string): string[] {
   }
 }
 
-// 从模块位置向上找 package.json 定位包根（dist/common-cli.js 在包内一层深，tsx 直跑 src/bin/ 在两层深）
+// 从模块位置向上找 package.json 定位包根（dist/media-cli.js 在包内一层深，tsx 直跑 src/bin/ 在两层深）
 function findPackageRoot(startDir: string): string | null {
   let dir = startDir;
   for (let i = 0; i < 5; i++) {
@@ -40,14 +40,14 @@ export function discoverPluginDirs(
   overrides: { globalRoot?: string; bundledRoot?: string } = {},
 ): PluginCandidate[] {
   const candidates: PluginCandidate[] = [];
-  for (const raw of (env.COMMON_CLI_PLUGINS_DIR ?? "").split(":")) {
+  for (const raw of (env.MEDIA_CLI_PLUGINS_DIR ?? "").split(":")) {
     if (raw.length > 0) candidates.push({ dir: resolve(cwd, raw), source: "env" });
   }
   const projectPlugins = resolve(join(cwd, "plugins"));
   for (const dir of containerPluginDirs(projectPlugins)) {
     candidates.push({ dir, source: "project" });
   }
-  const globalRoot = overrides.globalRoot ?? join(homedir(), ".common-cli", "plugins");
+  const globalRoot = overrides.globalRoot ?? join(homedir(), ".media-cli", "plugins");
   for (const dir of containerPluginDirs(globalRoot)) {
     candidates.push({ dir, source: "global" });
   }
