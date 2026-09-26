@@ -1,6 +1,6 @@
 {
   "name": "@dkplus/media-cli",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "通用插件化 Node CLI：视频胶片图/音视频转化（ffmpeg）、SRT 字幕（whisper.cpp）、Azure gpt-image-2 生图、Suno 音乐生成；给人用也给 AI 用",
   "license": "MIT",
   "type": "module",
