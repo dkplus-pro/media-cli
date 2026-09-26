@@ -79,6 +79,17 @@ node dist/common-cli.js --json image-gen --prompt "改成水彩风" --ref apple.
 
 调度策略：每次请求随机选一个账号发起，401/403/429/5xx 自动轮换下一账号重试，全池失败报 `E_PROVIDER_ERROR`；400 类参数错误不轮换。任何输出都不含 key。
 
+### media-cutout（本地抠图，macOS 14+）
+
+```bash
+node dist/common-cli.js --json media-cutout --input photo.jpg --output cut.png      # 单文件：透明 PNG，裁剪到主体+32px 边距
+node dist/common-cli.js --json media-cutout --input 图册/ --output cutout/           # 文件夹批量（一级）
+node dist/common-cli.js --json media-cutout --input 图册/ --recursive                # 递归子目录，输出 mirror 目录结构
+node dist/common-cli.js --json media-cutout --input photo.jpg --no-crop              # 不裁剪，保留原始画布
+```
+
+引擎为 Apple Vision framework（与系统「拷贝主体」同款分割，ANE 加速单张约 0.2s）。首次运行用 `swiftc` 自动编译工具并缓存到 `~/.common-cli/cache/media-cutout/`（源码变更自动重编译；`CUTOUT_BIN` 可指向现成二进制跳过编译）。仅支持 macOS 14+，其他平台报 `E_MISSING_DEPENDENCY`。支持 jpg/jpeg/png/webp；文件夹批量时单张失败不影响其余（失败项记入 `data.failed`）。
+
 ### suno-music（文生音乐 / 文生音效，open.suno.cn）
 
 ```bash

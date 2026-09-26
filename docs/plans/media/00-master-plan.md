@@ -34,6 +34,10 @@
 | D11 | 远端 base URL | `SUNO_BASE_URL` 默认 `https://open.suno.cn`；azure 端点本身即 env。全部可指向 127.0.0.1 mock 服务器 | e2e 测试不依赖外网与真实 key |
 | D12 | 提交格式 | media 阶段提交信息用 `media-NN: 摘要`（区别于壳的 `phase-NN`） | git 历史可区分壳与 media 两个建设期 |
 | D13 | npm 发布 | 包名 `@dkplus/media-cli`；新增第四插件发现源「随包内置」（`<包根>/plugins/`，优先级最低：env > project > global > bundled），随包分发、随装随用 | npm 全局安装后在任意目录可用全部命令；用户可用同名插件覆盖内置版本（阶段 05） |
+| D14 | 抠图引擎 | **macOS Vision framework**（`VNGenerateForegroundInstanceMaskRequest`，macOS 14+）；Swift 单文件工具随插件分发，首次运行 swiftc 编译缓存（源码哈希命名），`CUTOUT_BIN` 可覆盖 | ANE 加速单张约 0.2s（rembg CPU 1–3s）；零模型下载零 key；bbox 裁剪 Swift 内完成；用户确认（阶段 06） |
+| D15 | 抠图边距 | 默认裁剪到主体包围盒 + `--padding`（默认 32px，clamp 画布）；`--no-crop` 保留原始画布 | 用户原话「仅保留主体，主体周围留一点边距」 |
+| D16 | 抠图批量 | 文件夹输入：一级遍历 + `--recursive`（输出 mirror 相对结构）；jpg/jpeg/png/webp；单张失败 → `data.failed` 继续 | 可控性优先；与壳「单失败警告继续」精神一致 |
+| D17 | 抠图归属 | 新插件 `media-cutout`，命令 `media-cutout` | media-* 前缀=本地系，不沾 ffmpeg 系与云系 |
 
 ## 3. 命令契约
 
@@ -167,6 +171,7 @@ data：`{ "path": string, "bytes": number, "format": string, "size": string, "re
 | 03 | `03-azure-image.md` | azure-image 插件：池调度 + generations/edits | 01 |
 | 04 | `04-suno-music.md` | suno-music 插件：提交/轮询/下载 + 辅助命令 | 01 |
 | 05 | `05-npm-publish.md` | npm 发布准备：bundled 插件源 + `@dkplus/media-cli` 元数据 | 01–04 |
+| 06 | `06-media-cutout.md` | media-cutout 插件：macOS Vision 本地抠图（透明 PNG、bbox+边距、批量） | 01–05 |
 
 （02–04 仅依赖 01，但按 §8 协议严格串行执行。）
 
