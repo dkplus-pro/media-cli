@@ -43,13 +43,22 @@ pnpm lint && pnpm test       # Biome + Vitest（e2e spawn dist 真进程）
 
 ## 内置插件
 
-### media-av（本地音视频转化，依赖 ffmpeg/whisper.cpp）
+### media-av（本地音视频转化与压缩，依赖 ffmpeg/whisper.cpp）
 
 ```bash
 node dist/media-cli.js --json media-filmstrip --input 视频.mp4 --output grid.jpg
 #   4×4 十六格拼图，每格带时间戳——一张图让 AI 了解视频内容
 node dist/media-cli.js --json media-to-audio --input 视频.mp4 --format m4a
 node dist/media-cli.js --json media-transcribe --input 音频.mp3 --output out.srt   # 需 whisper.cpp
+
+# 压缩视频：H.264 CRF 26 重编码为 mp4（默认不改分辨率，faststart 利于网页播放）
+node dist/media-cli.js --json media-compress-video --input 视频.mov                  # → 视频.min.mp4
+node dist/media-cli.js --json media-compress-video --input 视频/ --recursive --max-height 720   # 文件夹批量 + 降分辨率
+node dist/media-cli.js --json media-compress-video --input 视频.mp4 --codec hevc --crf 28       # 体积更小、编码更慢
+
+# 压缩音频：有损格式保持原样重压（默认 128k）；wav/aiff 默认转无损 flac
+node dist/media-cli.js --json media-compress-audio --input 录音.wav                  # → 录音.min.flac（无损缩小）
+node dist/media-cli.js --json media-compress-audio --input song.mp3 --bitrate 96k   # → song.min.mp3
 ```
 
 | 环境变量 | 说明 |

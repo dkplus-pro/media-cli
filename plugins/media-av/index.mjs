@@ -1,6 +1,8 @@
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { compressAudio } from "./lib/compress-audio.mjs";
+import { compressVideo } from "./lib/compress-video.mjs";
 import { cliError } from "./lib/errors.mjs";
 import { hasDrawtext, probeDuration, probeImageSize, runFfmpeg } from "./lib/ffmpeg.mjs";
 import {
@@ -238,6 +240,55 @@ export default {
         { flags: "--language <code>", description: "语言代码（默认 auto）" },
       ],
       handler: transcribe,
+    },
+    {
+      name: "media-compress-video",
+      description: "压缩视频体积（H.264/HEVC 重编码，默认不改分辨率），支持文件与文件夹批量",
+      options: [
+        {
+          flags: "--input <path>",
+          description: "输入视频文件或文件夹（mp4/mov/m4v/mkv/webm/avi/flv/wmv）",
+        },
+        {
+          flags: "--output <path>",
+          description: "输出文件/目录（单文件默认 <name>.min.mp4，文件夹默认 ./min）",
+        },
+        { flags: "--crf <0-51>", description: "质量因子，越小质量越高体积越大（默认 26）" },
+        {
+          flags: "--preset <name>",
+          description: "编码速度预设 ultrafast~veryslow（默认 medium，越慢压缩率越高）",
+        },
+        { flags: "--codec <name>", description: "h264|hevc（默认 h264；hevc 体积更小、编码更慢）" },
+        {
+          flags: "--max-height <px>",
+          description: "可选降分辨率：高度上限，仅缩小不放大（如 720）",
+        },
+        { flags: "--audio-bitrate <rate>", description: "音轨码率（默认 128k）" },
+        { flags: "--format <name>", description: "输出容器 mp4|mov|mkv（默认 mp4）" },
+        { flags: "--recursive", description: "文件夹输入时递归子目录（默认仅一级）" },
+      ],
+      handler: compressVideo,
+    },
+    {
+      name: "media-compress-audio",
+      description: "压缩音频体积（重编码；wav/aiff 默认转无损 flac），支持文件与文件夹批量",
+      options: [
+        {
+          flags: "--input <path>",
+          description: "输入音频文件或文件夹（mp3/m4a/aac/ogg/opus/flac/wav/aiff）",
+        },
+        {
+          flags: "--output <path>",
+          description: "输出文件/目录（单文件默认 <name>.min.<format>，文件夹默认 ./min）",
+        },
+        { flags: "--bitrate <rate>", description: "目标码率（默认 128k，仅有损格式生效）" },
+        {
+          flags: "--format <name>",
+          description: "mp3|m4a|aac|opus|ogg|flac（默认：有损格式保持原样，无损源转 flac）",
+        },
+        { flags: "--recursive", description: "文件夹输入时递归子目录（默认仅一级）" },
+      ],
+      handler: compressAudio,
     },
   ],
 };

@@ -52,6 +52,42 @@ export async function probeImageSize(ffprobePath, file) {
   return { width: stream.width, height: stream.height };
 }
 
+// 探测媒体基础信息：时长 + 是否有真实视频轨/音轨（mp3/m4a 的封面 attached_pic 不算视频轨）
+export async function probeMediaInfo(ffprobePath, file) {
+  const { stdout } = await runFfprobe(ffprobePath, [
+    "-show_format",
+    "-show_streams",
+    "-of",
+    "json",
+    file,
+  ]);
+  let parsed;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    parsed = null;
+  }
+  const format = parsed?.format;
+  const durationSec = Number(format?.duration);
+  if (!format || !Number.isFinite(durationSec)) {
+    throw Object.assign(new Error(`无法读取媒体信息：${file}`), {
+      code: "E_PROVIDER_ERROR",
+      details: { source: "ffmpeg", stderr: stdout.slice(0, 200) },
+    });
+  }
+  const streams = Array.isArray(parsed.streams) ? parsed.streams : [];
+  const videoStream = streams.find(
+    (s) => s?.codec_type === "video" && s?.disposition?.attached_pic !== 1,
+  );
+  return {
+    durationSec,
+    hasVideo: Boolean(videoStream),
+    hasAudio: streams.some((s) => s?.codec_type === "audio"),
+    width: videoStream?.width ?? null,
+    height: videoStream?.height ?? null,
+  };
+}
+
 // 探测 ffmpeg 是否编译了 drawtext 滤镜（部分精简构建不含 libfreetype）
 export async function hasDrawtext(ffmpegPath) {
   try {
