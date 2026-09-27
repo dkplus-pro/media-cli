@@ -90,6 +90,20 @@ node dist/media-cli.js --json media-cutout --input photo.jpg --no-crop          
 
 引擎为 Apple Vision framework（与系统「拷贝主体」同款分割，ANE 加速单张约 0.2s）。首次运行用 `swiftc` 自动编译工具并缓存到 `~/.media-cli/cache/media-cutout/`（源码变更自动重编译；`CUTOUT_BIN` 可指向现成二进制跳过编译）。仅支持 macOS 14+，其他平台报 `E_MISSING_DEPENDENCY`。支持 jpg/jpeg/png/webp；文件夹批量时单张失败不影响其余（失败项记入 `data.failed`）。
 
+### media-image（图片压缩 / 文字水印，基于 sharp，无外部依赖）
+
+```bash
+# 压缩体积：不改变分辨率、不转格式；默认旁路输出不覆盖原图
+node dist/media-cli.js --json media-compress --input photo.jpg                       # 单文件 → photo.min.jpg
+node dist/media-cli.js --json media-compress --input 图册/ --output min/ --quality 80 # 文件夹批量（--recursive 递归子目录）
+
+# 平铺斜角文字水印：默认 30°、透明度 0.3、间距 80px，字体/字号/颜色可调
+node dist/media-cli.js --json media-watermark --input photo.jpg --text "版权所有" --font "PingFang SC"
+node dist/media-cli.js --json media-watermark --input 图册/ --text "DO NOT COPY" --angle 30 --spacing 80 --opacity 0.3 --recursive
+```
+
+支持 jpg/jpeg/png/webp；文件夹批量时单张失败不影响其余（失败项记入 `data.failed`）。压缩结果不比原图小时跳过落盘（`skipped: true`），原图永不变大；PNG 为无损优化（不量化），要明显减体积请压 jpg/webp。带 EXIF 方向的图会先摆正到像素再处理。水印文字经 SVG 渲染（sharp 内置，无需 fontconfig 配置），字体由系统字体库解析，缺失时回退默认字体；输出重编码用高画质（jpeg 92 / webp 90 / png 无损）。
+
 ### suno-music（文生音乐 / 文生音效，open.suno.cn）
 
 ```bash
