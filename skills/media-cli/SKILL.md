@@ -1,6 +1,6 @@
 ---
 name: media-cli
-description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠图/去背景/透明 PNG/主体提取（media-cutout，macOS Vision）、压缩图片/图片瘦身/减小体积不改分辨率（media-compress，sharp）、图片加水印/平铺斜角水印/防盗图/文字水印（media-watermark，支持字体/角度/间距/透明度）、压缩视频/视频瘦身/减小视频体积（media-compress-video，ffmpeg H.264/HEVC）、压缩音频/音频瘦身（media-compress-audio，mp3/m4a/flac）、视频转胶片图/16 帧拼图/视频帧理解（media-filmstrip）、视频转音频/提取音轨（media-to-audio）、音视频转字幕/SRT（media-transcribe，whisper.cpp）、AI 生图/文生图/参考图改图（image-gen，Azure gpt-image-2）、AI 音乐生成/配乐/BGM/音效（suno-gen/suno-sound，Suno）。给人用也给 AI 用：所有命令支持 --json 机器可读输出。用户要求处理图片/视频/音频、压缩或加水印、生成图像或音乐、提取字幕或音轨时使用本 skill。
+description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠图/去背景/透明 PNG/主体提取（media-cutout，macOS Vision）、压缩图片/图片瘦身/减小体积不改分辨率（media-compress，sharp）、图片加水印/平铺斜角水印/防盗图/文字水印（media-watermark，支持字体/角度/间距/透明度）、压缩视频/视频瘦身/减小视频体积（media-compress-video，ffmpeg H.264/HEVC）、压缩音频/音频瘦身（media-compress-audio，mp3/m4a/flac）、视频转胶片图/16 帧拼图/视频帧理解（media-filmstrip）、视频转音频/提取音轨（media-to-audio）、音视频转字幕/SRT/字幕提取（media-transcribe，whisper.cpp 本地）、云端转写/豆包转字幕/语音转文字/听写/无需安装模型（doubao-media-transcribe，火山方舟 Ark doubao-seed 多模态，长音频自动分段并发）、AI 生图/文生图/参考图改图（image-gen，Azure gpt-image-2）、AI 音乐生成/配乐/BGM/音效（suno-gen/suno-sound，Suno）。给人用也给 AI 用：所有命令支持 --json 机器可读输出。用户要求处理图片/视频/音频、压缩或加水印、生成图像或音乐、提取字幕或音轨时使用本 skill。
 ---
 
 # media-cli（@dkplus/media-cli）
@@ -28,6 +28,7 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 | 视频画帧速览（AI 读视频内容） | `media-filmstrip` | `--input <视频>` `--output`（默认 4×4 十六格、每格烧时间戳；`--cell-width` `--format jpg\|png`） |
 | 提取音轨/视频转音频 | `media-to-audio` | `--input` `--format mp3\|m4a\|wav\|flac\|ogg` `--bitrate <rate=192k>` |
 | 音/视频转字幕 SRT | `media-transcribe` | `--input` `--output` `--language` `--model-path`（默认取 WHISPER_MODEL） |
+| 云端转写/豆包转字幕（免装模型） | `doubao-media-transcribe` | `--input` `--output` `--format srt\|txt`（默认 srt）`--language <auto>` `--prompt <专名提示>` `--segment-seconds <30>`（10–120）`--concurrency <4>`（1–8）`--model` |
 | 文生图 | `image-gen --prompt <文案>` | `--size 1024x1024` `--output` `--quality` |
 | 参考图+文案改图/生图 | `image-gen --prompt ... --ref <图1> <图2>` | 多张参考图走 edits 端点；仅 jpg/jpeg/png/webp |
 | 文生音乐/配乐/BGM | `suno-gen` | `--prompt <灵感>` **或** `--lyrics <歌词>`（二选一，互斥）；`--tags` `--title` `--instrumental` `--model` |
@@ -42,6 +43,7 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 | `media-compress-video` / `media-compress-audio` | ffmpeg（PATH 或 `FFMPEG_PATH`）+ ffprobe | hevc 需 ffmpeg 含 libx265（brew 版自带） |
 | `media-filmstrip` / `media-to-audio` | ffmpeg（PATH 或 `FFMPEG_PATH`） | |
 | `media-transcribe` | + whisper.cpp（`WHISPER_CPP_BIN`）与 ggml 模型（`WHISPER_MODEL` 或 `--model-path`） | |
+| `doubao-media-transcribe` | `DOUBAO_API_KEY`（火山方舟 Ark）+ ffmpeg/ffprobe | `DOUBAO_BASE_URL` 默认 `https://ark.cn-beijing.volces.com/api/v3`（`/api/compatible` 路径不存在，别填）；`DOUBAO_TRANSCRIBE_MODEL` 默认 `doubao-seed-2-0-mini-260428`；`DOUBAO_TIMEOUT_MS` 默认 120000 |
 | `media-cutout` | **仅 macOS 14+**；首次运行自动 `swiftc` 编译缓存（需 Xcode CLT）；`CUTOUT_BIN` 可覆盖 | 其他平台明确报错，勿在 Linux CI 使用 |
 | `image-gen` | `AZURE_IMAGE_KEY_POOL` + `AZURE_IMAGE_ENDPOINT_POOL`（英文逗号分隔，**按索引一一配对**） | `AZURE_IMAGE_DEPLOYMENT=gpt-image-2` `AZURE_IMAGE_OUTPUT_FORMAT=png` `AZURE_IMAGE_QUALITY=auto` 有默认 |
 | `suno-*` | `SUNO_API_KEY`（open.suno.cn） | `SUNO_BASE_URL`/`SUNO_TIMEOUT_MS` 可选 |
@@ -59,4 +61,5 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 - `image-gen --ref` 按扩展名推断 mimetype 传给 Azure，仅支持 jpg/jpeg/png/webp；其他格式（heic、bin 等）本地即报 `E_INVALID_OPTION`（退出码 2），不发请求。HEIC 先转 jpg 再喂。
 - `image-gen --size` 非标比例可直接传对应 WxH，不限于 1024/1536 三档（如 4:3 传 `1536x1152` 实测可出图）。
 - 胶片图适合喂给多模态模型理解视频：一张图 16 帧、带 `mm:ss` 时间戳，可直接引用「00:42 处」。
+- 豆包（doubao）转写：**模型不返回逐句时间戳**，长音频按 silencedetect 静音点切段（默认 30s/段，硬上限 1.5 倍），SRT 段边界精确、段内各行按字数比例估算，多段结果会附 `E_TIMELINE_APPROXIMATE` 警告——要精确时间轴改用 `media-transcribe`。整段一次请求在 ~180s 会超时，命令内部已自动切段并发（默认 4），调用方无需干预；180s 音频实测约 9s 完成。`401/403 → E_CONFIG`（不重试），`429/5xx/超时`自动重试 2 次（400ms/1200ms 退避）；单段失败报 `E_PROVIDER_ERROR` 且 `details.segment/window` 指出是第几段（整条命令失败，不产出半成品字幕）。`--format txt` 只出纯文本、无 `data.cues`。
 - 错误码语义：`E_CONFIG` 配置缺失/非法 → 检查 env；`E_MISSING_DEPENDENCY` 外部二进制缺失 → `details.hint` 有安装提示；`E_PROVIDER_ERROR` 远端/进程失败 → `details.source` 标明来源（ffmpeg/whisper/vision/azure/suno）。
