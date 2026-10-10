@@ -73,17 +73,19 @@ node dist/media-cli.js --json media-compress-audio --input song.mp3 --bitrate 96
 
 ```bash
 export DOUBAO_API_KEY="ARK 控制台创建的 key"
+export DOUBAO_TRANSCRIBE_MODEL="doubao-seed-2-0-mini-260428"   # 模型 id 不内置默认值，换型号只改这里
 node dist/media-cli.js --json doubao-media-transcribe --input 访谈.mp4                 # → 访谈.mp4.srt
 node dist/media-cli.js --json doubao-media-transcribe --input 会议.wav --format txt    # 纯文本，无时间轴
 node dist/media-cli.js --json doubao-media-transcribe --input 课程.mp3 \
   --prompt "术语：张量、反向传播" --language zh                                          # 专名/语言提示
+node dist/media-cli.js --json doubao-media-transcribe --input 课程.mp3 --model doubao-seed-2-0-pro-260428   # 临时换型号
 ```
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
 | `DOUBAO_API_KEY` | 必填 | 缺失报 `E_CONFIG`；无效（401/403）同样报 `E_CONFIG` |
+| `DOUBAO_TRANSCRIBE_MODEL` | 必填（或每次传 `--model`） | 需 `input_modalities` 含 `audio` 的型号；两者都缺报 `E_CONFIG` 且不发起请求 |
 | `DOUBAO_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | Ark OpenAI 兼容端点（注意 `/api/compatible` 路径不存在） |
-| `DOUBAO_TRANSCRIBE_MODEL` | `doubao-seed-2-0-mini-260428` | 需 input_modalities 含 `audio` 的模型；`--model` 可临时覆盖 |
 | `DOUBAO_TIMEOUT_MS` | `120000` | 单次片段请求超时 |
 
 与 `media-transcribe`（本地 whisper.cpp）的分工：豆包不用下载模型、中文与嘈杂音频更稳，但模型不返回逐句时间戳——长音频由 silencedetect 按静音切段（默认 30s/段、4 并发）后逐段转写，**段边界精确、段内各行按字数比例估算**，输出附 `E_TIMELINE_APPROXIMATE` 警告；需要逐句精确时间轴请用 `media-transcribe`。

@@ -123,5 +123,7 @@ describe("doubao 选项与配置", () => {
     expect(getConfig({ DOUBAO_API_KEY: "k" }).baseUrl).toBe(
       "https://ark.cn-beijing.volces.com/api/v3",
     );
+    // 模型 id 不内置默认值（豆包型号按月更新，写死会失效）
+    expect(getConfig({ DOUBAO_API_KEY: "k" }).model).toBeNull();
   });
 });

@@ -73,8 +73,10 @@ function failReply(status: number): Reply {
   return { status, body: JSON.stringify({ error: { message: `mock-${status}` } }) };
 }
 
+const MODEL = "doubao-seed-2-0-mini-260428";
+
 function doubaoEnv(endpoint: string, key = "test-key"): Record<string, string> {
-  return { DOUBAO_API_KEY: key, DOUBAO_BASE_URL: endpoint };
+  return { DOUBAO_API_KEY: key, DOUBAO_BASE_URL: endpoint, DOUBAO_TRANSCRIBE_MODEL: MODEL };
 }
 
 function parse(stdout: string): Record<string, never> {
@@ -130,7 +132,7 @@ describe.runIf(hasFfmpeg)("doubao-media-transcribe e2e", () => {
         data: {
           path: out,
           format: "srt",
-          model: "doubao-seed-2-0-mini-260428",
+          model: MODEL,
           durationSec: 6,
           segments: 1,
           cues: 2,
@@ -149,7 +151,7 @@ describe.runIf(hasFfmpeg)("doubao-media-transcribe e2e", () => {
         model: string;
         messages: { content: { type: string; input_audio?: { format: string } }[] }[];
       };
-      expect(request.model).toBe("doubao-seed-2-0-mini-260428");
+      expect(request.model).toBe(MODEL);
       expect(request.messages[0].content.map((p) => p.type)).toEqual(["input_audio", "text"]);
       expect(request.messages[0].content[0].input_audio?.format).toBe("mp3");
       expect(mock.auths[0]).toBe("Bearer test-key");
@@ -299,6 +301,37 @@ describe.runIf(hasFfmpeg)("doubao-media-transcribe e2e", () => {
         (parse(run2.stdout) as { error: { details: { reason: string } } }).error.details.reason,
       ).toBe("empty_result");
       await empty.close();
+    },
+    T,
+  );
+
+  it(
+    "模型 id 只来自 env 或 --model：两者都缺 → E_CONFIG 且不发请求，--model 覆盖 env",
+    async () => {
+      const mock = await startMock([okReply("内容")]);
+      const noModel = await cli(["--json", "doubao-media-transcribe", "--input", short], {
+        ...doubaoEnv(mock.endpoint),
+        DOUBAO_TRANSCRIBE_MODEL: "",
+      });
+      expect(noModel.code).toBe(3);
+      const error = (parse(noModel.stdout) as { error: { code: string; details: { var: string } } })
+        .error;
+      expect({ code: error.code, v: error.details.var }).toEqual({
+        code: "E_CONFIG",
+        v: "DOUBAO_TRANSCRIBE_MODEL",
+      });
+
+      const overridden = await cli(
+        ["--json", "doubao-media-transcribe", "--input", short, "--model", "custom-260501"],
+        doubaoEnv(mock.endpoint),
+      );
+      expect(overridden.code).toBe(0);
+      expect((parse(overridden.stdout) as { data: { model: string } }).data.model).toBe(
+        "custom-260501",
+      );
+      expect((JSON.parse(mock.bodies[0]) as { model: string }).model).toBe("custom-260501");
+      expect(mock.hits).toBe(1);
+      await mock.close();
     },
     T,
   );

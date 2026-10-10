@@ -4,7 +4,7 @@ import path from "node:path";
 import { transcribeClip } from "./ark.mjs";
 import { detectSilences, extractClipBase64, probeDuration } from "./audio.mjs";
 import { resolveFfmpeg, resolveFfprobe } from "./bin.mjs";
-import { getConfig } from "./config.mjs";
+import { getConfig, MODEL_VAR } from "./config.mjs";
 import { cliError } from "./errors.mjs";
 import { buildPrompt, parseOptions } from "./options.mjs";
 import { mapLimit } from "./pool.mjs";
@@ -43,6 +43,12 @@ export async function transcribeWithDoubao(ctx, args) {
   // 早取 config：缺 key 要在起 ffmpeg/上传音频之前就以干净错误退出
   const config = getConfig();
   const model = opts.model ?? config.model;
+  if (!model) {
+    throw cliError("E_CONFIG", `缺少豆包模型 id：设置 ${MODEL_VAR} 或用 --model 指定`, {
+      var: MODEL_VAR,
+      hint: "GET /models 里取 status 非 Shutdown 且 input_modalities 含 audio 的型号",
+    });
+  }
   const ffmpeg = resolveFfmpeg();
   const ffprobe = resolveFfprobe();
   const durationSec = await probeDuration(ffprobe, input);

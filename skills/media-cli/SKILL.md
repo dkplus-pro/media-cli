@@ -28,7 +28,7 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 | 视频画帧速览（AI 读视频内容） | `media-filmstrip` | `--input <视频>` `--output`（默认 4×4 十六格、每格烧时间戳；`--cell-width` `--format jpg\|png`） |
 | 提取音轨/视频转音频 | `media-to-audio` | `--input` `--format mp3\|m4a\|wav\|flac\|ogg` `--bitrate <rate=192k>` |
 | 音/视频转字幕 SRT | `media-transcribe` | `--input` `--output` `--language` `--model-path`（默认取 WHISPER_MODEL） |
-| 云端转写/豆包转字幕（免装模型） | `doubao-media-transcribe` | `--input` `--output` `--format srt\|txt`（默认 srt）`--language <auto>` `--prompt <专名提示>` `--segment-seconds <30>`（10–120）`--concurrency <4>`（1–8）`--model` |
+| 云端转写/豆包转字幕（免装模型） | `doubao-media-transcribe` | `--input` `--output` `--format srt\|txt`（默认 srt）`--language <auto>` `--prompt <专名提示>` `--segment-seconds <30>`（10–120）`--concurrency <4>`（1–8）`--model <id>`（不传则取 `DOUBAO_TRANSCRIBE_MODEL`） |
 | 文生图 | `image-gen --prompt <文案>` | `--size 1024x1024` `--output` `--quality` |
 | 参考图+文案改图/生图 | `image-gen --prompt ... --ref <图1> <图2>` | 多张参考图走 edits 端点；仅 jpg/jpeg/png/webp |
 | 文生音乐/配乐/BGM | `suno-gen` | `--prompt <灵感>` **或** `--lyrics <歌词>`（二选一，互斥）；`--tags` `--title` `--instrumental` `--model` |
@@ -43,7 +43,7 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 | `media-compress-video` / `media-compress-audio` | ffmpeg（PATH 或 `FFMPEG_PATH`）+ ffprobe | hevc 需 ffmpeg 含 libx265（brew 版自带） |
 | `media-filmstrip` / `media-to-audio` | ffmpeg（PATH 或 `FFMPEG_PATH`） | |
 | `media-transcribe` | + whisper.cpp（`WHISPER_CPP_BIN`）与 ggml 模型（`WHISPER_MODEL` 或 `--model-path`） | |
-| `doubao-media-transcribe` | `DOUBAO_API_KEY`（火山方舟 Ark）+ ffmpeg/ffprobe | `DOUBAO_BASE_URL` 默认 `https://ark.cn-beijing.volces.com/api/v3`（`/api/compatible` 路径不存在，别填）；`DOUBAO_TRANSCRIBE_MODEL` 默认 `doubao-seed-2-0-mini-260428`；`DOUBAO_TIMEOUT_MS` 默认 120000 |
+| `doubao-media-transcribe` | `DOUBAO_API_KEY` + `DOUBAO_TRANSCRIBE_MODEL`（或每次传 `--model`）+ ffmpeg/ffprobe | 模型 id **无内置默认值**，两者都缺 → `E_CONFIG` 且不发请求；`DOUBAO_BASE_URL` 默认 `https://ark.cn-beijing.volces.com/api/v3`（`/api/compatible` 路径不存在，别填）；`DOUBAO_TIMEOUT_MS` 默认 120000 |
 | `media-cutout` | **仅 macOS 14+**；首次运行自动 `swiftc` 编译缓存（需 Xcode CLT）；`CUTOUT_BIN` 可覆盖 | 其他平台明确报错，勿在 Linux CI 使用 |
 | `image-gen` | `AZURE_IMAGE_KEY_POOL` + `AZURE_IMAGE_ENDPOINT_POOL`（英文逗号分隔，**按索引一一配对**） | `AZURE_IMAGE_DEPLOYMENT=gpt-image-2` `AZURE_IMAGE_OUTPUT_FORMAT=png` `AZURE_IMAGE_QUALITY=auto` 有默认 |
 | `suno-*` | `SUNO_API_KEY`（open.suno.cn） | `SUNO_BASE_URL`/`SUNO_TIMEOUT_MS` 可选 |

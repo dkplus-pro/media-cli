@@ -2,8 +2,10 @@ import { cliError } from "./errors.mjs";
 
 // Ark 的 OpenAI 兼容聊天端点在 /api/v3；/api/compatible 路径不存在（404）
 const DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3";
-const DEFAULT_MODEL = "doubao-seed-2-0-mini-260428";
 const DEFAULT_TIMEOUT_MS = 120_000;
+
+// 模型 id 不内置默认值：豆包型号按月更新，写死会随时间失效
+export const MODEL_VAR = "DOUBAO_TRANSCRIBE_MODEL";
 
 function positiveInt(raw, fallback) {
   const n = Number.parseInt(String(raw ?? ""), 10);
@@ -21,7 +23,8 @@ export function getConfig(env = process.env) {
   return {
     apiKey: apiKey.trim(),
     baseUrl: (env.DOUBAO_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, ""),
-    model: env.DOUBAO_TRANSCRIBE_MODEL || DEFAULT_MODEL,
+    // null 表示未配置：由 --model 兜底，两者都缺时 transcribe 报 E_CONFIG
+    model: (env.DOUBAO_TRANSCRIBE_MODEL ?? "").trim() || null,
     timeoutMs: positiveInt(env.DOUBAO_TIMEOUT_MS, DEFAULT_TIMEOUT_MS),
   };
 }

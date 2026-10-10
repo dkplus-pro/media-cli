@@ -15,7 +15,7 @@ export default {
         {
           flags: "--model <id>",
           description:
-            "豆包模型 id（默认取 DOUBAO_TRANSCRIBE_MODEL，兜底 doubao-seed-2-0-mini-260428）",
+            "豆包模型 id（取自 --model 或环境变量 DOUBAO_TRANSCRIBE_MODEL，无内置默认值）",
         },
         { flags: "--language <code>", description: "转写语言提示（默认 auto，跟随音频原语言）" },
         { flags: "--prompt <text>", description: "附加转写要求（专有名词、口音、领域提示）" },
