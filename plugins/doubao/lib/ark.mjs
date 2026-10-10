@@ -34,21 +34,8 @@ async function requestOnce(config, body) {
   }
 }
 
-// 一次调用 = 一个音频片段；分段任务并发跑，单段失败会拖垮整条命令，故对瞬时错误重试
-export async function transcribeClip(config, { audioBase64, format, prompt, model }) {
-  const body = {
-    model: model ?? config.model,
-    messages: [
-      {
-        role: "user",
-        content: [
-          { type: "input_audio", input_audio: { data: audioBase64, format } },
-          { type: "text", text: prompt },
-        ],
-      },
-    ],
-  };
-
+// 通用对话请求：转写与分析共用；瞬时错误（429/5xx/超时）重试，401/403 与 4xx 立即失败
+export async function chatWithRetry(config, body) {
   let lastError = null;
   for (let attempt = 0; attempt <= RETRY_BACKOFF_MS.length; attempt += 1) {
     if (attempt > 0) await sleep(RETRY_BACKOFF_MS[attempt - 1]);
@@ -104,7 +91,7 @@ export async function transcribeClip(config, { audioBase64, format, prompt, mode
     }
     const content = extractText(payload);
     if (content.trim() === "") {
-      throw cliError("E_PROVIDER_ERROR", "doubao 返回空转写内容", {
+      throw cliError("E_PROVIDER_ERROR", "doubao 返回空内容", {
         reason: "empty_result",
         finishReason: payload?.choices?.[0]?.finish_reason ?? null,
       });
@@ -119,4 +106,20 @@ export async function transcribeClip(config, { audioBase64, format, prompt, mode
     };
   }
   throw lastError ?? cliError("E_PROVIDER_ERROR", "doubao 请求失败", { reason: "unknown" });
+}
+
+// 一次调用 = 一个音频片段；分段任务并发跑，单段失败会拖垮整条命令，故对瞬时错误重试
+export async function transcribeClip(config, { audioBase64, format, prompt, model }) {
+  return chatWithRetry(config, {
+    model: model ?? config.model,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "input_audio", input_audio: { data: audioBase64, format } },
+          { type: "text", text: prompt },
+        ],
+      },
+    ],
+  });
 }

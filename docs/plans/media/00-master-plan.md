@@ -143,7 +143,7 @@ data：`{ "path": string, "bytes": number, "format": string, "size": string, "re
 | doubao | `DOUBAO_API_KEY` | 是 | — | 火山方舟 Ark Bearer key；无效（401/403）→ `E_CONFIG` |
 | doubao | `DOUBAO_BASE_URL` | 否 | `https://ark.cn-beijing.volces.com/api/v3` | OpenAI 兼容端点；mock 测试入口（`/api/compatible` 路径不存在） |
 | doubao | `DOUBAO_TRANSCRIBE_MODEL` | 是（或每次传 `--model`） | — | 豆包型号按月更新，**不内置默认值**；需 `input_modalities` 含 `audio`；两者都缺 → `E_CONFIG` |
-| doubao | `DOUBAO_TIMEOUT_MS` | 否 | `120000` | 单片段请求超时（长音频内部已切段，勿整段送模型） |
+| doubao | `DOUBAO_TIMEOUT_MS` | 否 | `120000` | 单片段请求超时（转写长音频内部已切段，勿整段送模型；music-analysis 为推理密集型，请求超时下限 180s） |
 
 ## 5. 错误码增量（阶段 01 登记 `src/core/errors.ts`，同步壳 00-master-plan §4.4）
 

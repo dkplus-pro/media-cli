@@ -1,4 +1,8 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { parseAnalysisOptions } from "../../plugins/doubao/lib/analysis.mjs";
+import { batchOutputPath, defaultSidecar } from "../../plugins/doubao/lib/analysis-files.mjs";
+import { extractJsonObject, structureCovers } from "../../plugins/doubao/lib/analysis-prompt.mjs";
 import { getConfig } from "../../plugins/doubao/lib/config.mjs";
 import { buildPrompt, parseOptions } from "../../plugins/doubao/lib/options.mjs";
 import { parseSilences, planSegments } from "../../plugins/doubao/lib/segments.mjs";
@@ -125,5 +129,62 @@ describe("doubao 选项与配置", () => {
     );
     // 模型 id 不内置默认值（豆包型号按月更新，写死会失效）
     expect(getConfig({ DOUBAO_API_KEY: "k" }).model).toBeNull();
+  });
+});
+
+describe("doubao 音乐分析：JSON 提取与时间轴兜底", () => {
+  const analysis = JSON.stringify({ isMusic: true, genre: ["Cinematic"] });
+
+  it("extractJsonObject 兼容裸 JSON / ```json 围栏 / 前后闲话", () => {
+    expect(extractJsonObject(analysis)).toEqual({ isMusic: true, genre: ["Cinematic"] });
+    expect(extractJsonObject(`\`\`\`json\n${analysis}\n\`\`\``)).toEqual({
+      isMusic: true,
+      genre: ["Cinematic"],
+    });
+    expect(extractJsonObject(`好的，以下是分析：\n${analysis}\n希望有帮助`)).toEqual({
+      isMusic: true,
+      genre: ["Cinematic"],
+    });
+  });
+
+  it("extractJsonObject：字符串里的花括号不干扰配平，非法/非对象/残缺 → E_PROVIDER_ERROR bad_json", () => {
+    expect(extractJsonObject('{"a":"包含 } 花括号","b":{"c":1}}')).toEqual({
+      a: "包含 } 花括号",
+      b: { c: 1 },
+    });
+    const bad = (text: string) =>
+      expect(() => extractJsonObject(text)).toThrow(
+        expect.objectContaining({ code: "E_PROVIDER_ERROR" }),
+      );
+    bad("完全没有 JSON");
+    bad("[1,2,3]"); // 数组不是对象
+    bad('{"a":1'); // 残缺
+    bad("{invalid}");
+  });
+
+  it("structureCovers：末段接近结尾为真，显著缺口为假（时间戳漂移兜底）", () => {
+    expect(structureCovers([{ startSec: 0, endSec: 100 }], 100)).toBe(true);
+    expect(structureCovers([{ startSec: 0, endSec: 80 }], 100)).toBe(true);
+    expect(structureCovers([{ startSec: 0, endSec: 60 }], 100)).toBe(false);
+    expect(structureCovers([], 100)).toBe(false); // 无分段视为未覆盖
+    expect(structureCovers(undefined, 100)).toBe(false);
+  });
+
+  it("分析选项默认值与越界夹取：segment-seconds 60–300，concurrency 1–8", () => {
+    expect(parseAnalysisOptions({})).toMatchObject({ segmentSeconds: 120, concurrency: 4 });
+    expect(parseAnalysisOptions({ segmentSeconds: "30" }).segmentSeconds).toBe(60);
+    expect(parseAnalysisOptions({ segmentSeconds: "999" }).segmentSeconds).toBe(300);
+    expect(parseAnalysisOptions({ concurrency: "99" }).concurrency).toBe(8);
+    expect(parseAnalysisOptions({ model: "m1" }).model).toBe("m1");
+    expect(() => parseAnalysisOptions({ concurrency: "abc" })).toThrow(
+      expect.objectContaining({ code: "E_INVALID_OPTION" }),
+    );
+  });
+
+  it("输出路径：单文件旁路 <stem>.music.json，批量保留相对层级", () => {
+    expect(defaultSidecar("/a/b/曲子.mp3")).toBe("/a/b/曲子.music.json");
+    expect(batchOutputPath("/out", "子目录/曲子.flac")).toBe(
+      path.join("/out", "子目录", "曲子.music.json"),
+    );
   });
 });

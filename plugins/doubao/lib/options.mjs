@@ -1,6 +1,7 @@
 import { cliError } from "./errors.mjs";
 
-function parseNumber(raw, option, { min, max, fallback }) {
+// 越界夹取 + 非数字报错 + 缺省兜底；转写与音乐分析共用
+export function parseBoundedNumber(raw, option, { min, max, fallback }) {
   if (raw === undefined || raw === true || raw === "") return fallback;
   const n = Number(raw);
   if (!Number.isFinite(n)) {
@@ -28,7 +29,7 @@ export function parseFormat(raw) {
 }
 
 export function parseOptions(args) {
-  const segmentSeconds = parseNumber(args.segmentSeconds, "--segment-seconds", {
+  const segmentSeconds = parseBoundedNumber(args.segmentSeconds, "--segment-seconds", {
     min: 10,
     max: 120,
     fallback: 30,
@@ -38,7 +39,7 @@ export function parseOptions(args) {
     segmentSeconds,
     // 单段硬上限：超过 ~45s 的音频一次请求延迟陡增且易超时
     maxSegmentSeconds: Math.min(120, Math.round(segmentSeconds * 1.5)),
-    concurrency: parseNumber(args.concurrency, "--concurrency", {
+    concurrency: parseBoundedNumber(args.concurrency, "--concurrency", {
       min: 1,
       max: 8,
       fallback: 4,

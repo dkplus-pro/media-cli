@@ -69,7 +69,7 @@ node dist/media-cli.js --json media-compress-audio --input song.mp3 --bitrate 96
 
 依赖安装：`brew install ffmpeg`；whisper.cpp 用 `brew install whisper-cpp` 并下载 ggml 模型（base/small/medium）。ffmpeg 未编译 drawtext 时胶片图自动降级为无时间戳并附结构化警告。
 
-### doubao（豆包多模态云端转写，依赖 ffmpeg + DOUBAO_API_KEY）
+### doubao（豆包多模态云端转写 + 音乐理解，依赖 ffmpeg + DOUBAO_API_KEY）
 
 ```bash
 export DOUBAO_API_KEY="ARK 控制台创建的 key"
@@ -81,6 +81,14 @@ node dist/media-cli.js --json doubao-media-transcribe --input 课程.mp3 \
 node dist/media-cli.js --json doubao-media-transcribe --input 课程.mp3 --model doubao-seed-2-0-pro-260428   # 临时换型号
 ```
 
+音乐理解分析（`doubao-music-analysis`）——听懂一段音乐并输出 JSON 描述：风格、情感、BPM/调性、乐器、分段结构（每段时间/情感/强度）、视频适用场景与剪辑建议、记忆点：
+
+```bash
+node dist/media-cli.js --json doubao-music-analysis --input BGM.mp3                   # → BGM.music.json
+node dist/media-cli.js --json doubao-music-analysis --input 素材mv.mp4                # 视频同样可喂（取音轨）
+node dist/media-cli.js --json doubao-music-analysis --input 音乐库/ --recursive       # 文件夹批量 → ./music-analysis/
+```
+
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
 | `DOUBAO_API_KEY` | 必填 | 缺失报 `E_CONFIG`；无效（401/403）同样报 `E_CONFIG` |
@@ -89,6 +97,8 @@ node dist/media-cli.js --json doubao-media-transcribe --input 课程.mp3 --model
 | `DOUBAO_TIMEOUT_MS` | `120000` | 单次片段请求超时 |
 
 与 `media-transcribe`（本地 whisper.cpp）的分工：豆包不用下载模型、中文与嘈杂音频更稳，但模型不返回逐句时间戳——长音频由 silencedetect 按静音切段（默认 30s/段、4 并发）后逐段转写，**段边界精确、段内各行按字数比例估算**，输出附 `E_TIMELINE_APPROXIMATE` 警告；需要逐句精确时间轴请用 `media-transcribe`。
+
+`doubao-music-analysis` 与转写共用上表环境变量；分析是推理密集型（比转写慢，45s 音乐约 50s、6 分钟约 2–3 分钟），≤240s 整曲单请求、更长曲子自动切段（默认 120s/段）并发分析后合并成全局一致的描述；模型时间戳为估算，structure 未覆盖到结尾或输入疑似非音乐时会附警告（不失败）。
 
 ### azure-image（Azure gpt-image-2 生图）
 
