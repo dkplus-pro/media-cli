@@ -130,6 +130,21 @@ node dist/media-cli.js --json media-cutout --input photo.jpg --no-crop          
 
 引擎为 Apple Vision framework（与系统「拷贝主体」同款分割，ANE 加速单张约 0.2s）。首次运行用 `swiftc` 自动编译工具并缓存到 `~/.media-cli/cache/media-cutout/`（源码变更自动重编译；`CUTOUT_BIN` 可指向现成二进制跳过编译）。仅支持 macOS 14+，其他平台报 `E_MISSING_DEPENDENCY`。支持 jpg/jpeg/png/webp；文件夹批量时单张失败不影响其余（失败项记入 `data.failed`）。
 
+### media-cut-part（人体部位裁剪，macOS 14+）
+
+只裁出照片里人身上的某一个部位/某一件衣服，产出透明 PNG（框内仅保留人体像素，背景透明）。
+
+```bash
+node dist/media-cli.js --json media-cut-part --input photo.jpg --part top            # 上半身衣服 → photo-top.png
+node dist/media-cli.js --json media-cut-part --input photo.jpg --part outfit         # 上下衣服搭配（肩到脚踝）
+node dist/media-cli.js --json media-cut-part --input photo.jpg --part shoes --padding 12
+node dist/media-cli.js --json media-cut-part --input 图册/ --part socks --recursive   # 文件夹批量 → ./cut-socks
+```
+
+`--part` 必填，取值：`head` 人头（脸框含发际到肩）、`hat` 帽子（脸部上方）、`top` 上半身衣服（肩到腰）、`bottom` 下半身衣服（腰到脚踝）、`outfit` 上下衣服搭配（肩到脚踝）、`gloves` 手袜（手腕向外的手部）、`shoes` 鞋子（脚踝到画面底部）、`socks` 袜子（小腿到脚踝）。
+
+部位由「人像分割 mask + 人体姿态关键点 + 人脸框」按解剖学边界推导，是几何近似而非服装语义识别：衣物随人体保留，画面中无人穿着的独立衣物不会进来；合影按肩宽列窗收窄但仍可能带进紧邻人物。部位被截断/遮挡/在画面外时报 `E_PROVIDER_ERROR` 且 `details.reason` 为 `part_not_detected`（没有人/姿态与人脸不可用则 `no_person`），文件夹批量时这类失败计入 `data.failed` 而不中断整批。引擎与编译缓存机制同 `media-cutout`，可用 `PART_CROP_BIN` 单独指定现成二进制。
+
 ### media-image（图片压缩 / 文字水印，基于 sharp，无外部依赖）
 
 ```bash

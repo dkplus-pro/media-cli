@@ -9,13 +9,19 @@ import { cliError } from "./errors.mjs";
 
 const execFileAsync = promisify(execFile);
 
+function swiftDir() {
+  return path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "swift");
+}
+
 // Swift 工具源码（缓存名含源码哈希，源码变更自动重编译）
 export function swiftSourcePath() {
-  return path.join(
-    path.dirname(fileURLToPath(import.meta.url)),
-    "..",
-    "swift",
-    "vision-cutout.swift",
+  return path.join(swiftDir(), "vision-cutout.swift");
+}
+
+// 部位裁剪为多文件编译：main.swift 承载顶层语句，其余为模块
+export function partCropSourcePaths() {
+  return ["analysis.swift", "body.swift", "mask.swift", "vision-part-crop.swift", "main.swift"].map(
+    (file) => path.join(swiftDir(), file),
   );
 }
 
@@ -39,25 +45,29 @@ function findOnPath(name, env) {
 
 export const SWIFT_TARGET = "arm64-apple-macos14.0";
 
-async function compile(sourcePath, targetPath, env) {
+async function compile(sourcePaths, targetPath, env, depName, binVar) {
   const swiftc = findOnPath("swiftc", env);
   if (!swiftc) {
-    throw cliError("E_MISSING_DEPENDENCY", "抠图需要 macOS 14+ 与 Xcode Command Line Tools", {
-      dependency: "swiftc",
-      hint: "xcode-select --install（或设置 CUTOUT_BIN 指向已编译的 vision-cutout）",
-    });
+    throw cliError(
+      "E_MISSING_DEPENDENCY",
+      `${depName} 需要 macOS 14+ 与 Xcode Command Line Tools`,
+      {
+        dependency: depName,
+        hint: `xcode-select --install（或设置 ${binVar} 指向已编译的 ${depName}）`,
+      },
+    );
   }
   const tmpTarget = `${targetPath}.${process.pid}.tmp`;
   try {
     // swiftc 不会创建输出目录，必须先建缓存目录
     mkdirSync(path.dirname(targetPath), { recursive: true });
-    await execFileAsync(swiftc, ["-O", "-target", SWIFT_TARGET, sourcePath, "-o", tmpTarget], {
+    await execFileAsync(swiftc, ["-O", "-target", SWIFT_TARGET, ...sourcePaths, "-o", tmpTarget], {
       encoding: "utf8",
       timeout: 120_000,
     });
     renameSync(tmpTarget, targetPath); // rename 保证并发编译下的原子可见性
   } catch (err) {
-    throw cliError("E_PROVIDER_ERROR", "vision-cutout 编译失败", {
+    throw cliError("E_PROVIDER_ERROR", `${depName} 编译失败`, {
       source: "swiftc",
       stderr: String(err?.stderr ?? err?.message ?? "").slice(-800),
     });
@@ -65,33 +75,48 @@ async function compile(sourcePath, targetPath, env) {
   return targetPath;
 }
 
-// 解析抠图二进制：CUTOUT_BIN > 源码哈希缓存 > swiftc 现场编译
-export async function resolveCutoutBin(env = process.env) {
-  const override = env.CUTOUT_BIN;
+// 解析二进制：环境变量覆盖 > 源码哈希缓存 > swiftc 现场编译
+async function resolveTool({ env, depName, binVar, sources }) {
+  const override = env[binVar];
   if (override) {
     if (!isExecutable(override)) {
-      throw cliError("E_MISSING_DEPENDENCY", `CUTOUT_BIN 不可执行：${override}`, {
-        dependency: "vision-cutout",
-        envVar: "CUTOUT_BIN",
+      throw cliError("E_MISSING_DEPENDENCY", `${binVar} 不可执行：${override}`, {
+        dependency: depName,
+        envVar: binVar,
         value: override,
       });
     }
     return override;
   }
-  const sourcePath = swiftSourcePath();
-  const sourceHash = createHash("sha256")
-    .update(readFileSync(sourcePath))
-    .digest("hex")
-    .slice(0, 8);
+  const hash = createHash("sha256");
+  for (const source of sources) hash.update(readFileSync(source));
   const cachePath = path.join(
     homedir(),
     ".media-cli",
     "cache",
     "media-cutout",
-    `vision-cutout-${sourceHash}`,
+    `${depName}-${hash.digest("hex").slice(0, 8)}`,
   );
   if (isExecutable(cachePath)) return cachePath;
-  return compile(sourcePath, cachePath, env);
+  return compile(sources, cachePath, env, depName, binVar);
+}
+
+export async function resolveCutoutBin(env = process.env) {
+  return resolveTool({
+    env,
+    depName: "vision-cutout",
+    binVar: "CUTOUT_BIN",
+    sources: [swiftSourcePath()],
+  });
+}
+
+export async function resolvePartCropBin(env = process.env) {
+  return resolveTool({
+    env,
+    depName: "vision-part-crop",
+    binVar: "PART_CROP_BIN",
+    sources: partCropSourcePaths(),
+  });
 }
 
 // 仅用于测试与调用方判断输出尺寸（stat 便捷封装）
