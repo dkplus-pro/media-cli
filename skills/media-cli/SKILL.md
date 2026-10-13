@@ -1,6 +1,6 @@
 ---
 name: media-cli
-description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠图/去背景/透明 PNG/主体提取（media-cutout，macOS Vision）、压缩图片/图片瘦身/减小体积不改分辨率（media-compress，sharp）、图片加水印/平铺斜角水印/防盗图/文字水印（media-watermark，支持字体/角度/间距/透明度）、图片合并 PDF/多图转一个 pdf/照片拼文档/扫描件整理/插图排版成册/图片转 pdf（media-to-pdf，sharp+pdf-lib，默认按文件名自然序排页，支持文件夹批量）、压缩视频/视频瘦身/减小视频体积（media-compress-video，ffmpeg H.264/HEVC）、压缩音频/音频瘦身（media-compress-audio，mp3/m4a/flac）、视频转胶片图/16 帧拼图/视频帧理解（media-filmstrip）、视频转音频/提取音轨（media-to-audio）、音视频转字幕/SRT/字幕提取（media-transcribe，whisper.cpp 本地）、云端转写/豆包转字幕/语音转文字/听写/无需安装模型（doubao-media-transcribe，火山方舟 Ark doubao-seed 多模态，长音频自动分段并发）、音乐理解/音乐分析/歌曲分析/BGM 分析/音乐情感/音乐风格/配乐选曲/音乐适用场景/音乐 BPM/乐器识别/音乐分段结构（doubao-music-analysis，输出 JSON 音乐描述：风格/情感/BPM/调性/乐器/分段结构/视频适用场景/记忆点，支持文件夹批量）、AI 生图/文生图/参考图改图（image-gen，Azure gpt-image-2）、AI 音乐生成/配乐/BGM/音效（suno-gen/suno-sound，Suno）。给人用也给 AI 用：所有命令支持 --json 机器可读输出。用户要求处理图片/视频/音频、压缩或加水印、把一批图片合并或转成一个 PDF、生成图像或音乐、提取字幕或音轨、分析理解一段音乐是什么风格情感适合什么视频时使用本 skill。
+description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠图/去背景/透明 PNG/主体提取（media-cutout，macOS Vision）、压缩图片/图片瘦身/减小体积不改分辨率（media-compress，sharp）、图片加水印/平铺斜角水印/防盗图/文字水印（media-watermark，支持字体/角度/间距/透明度）、图片合并 PDF/多图转一个 pdf/照片拼文档/扫描件整理/插图排版成册/图片转 pdf（media-to-pdf，sharp+pdf-lib，默认按文件名自然序排页，支持文件夹批量）、压缩视频/视频瘦身/减小视频体积（media-compress-video，ffmpeg H.264/HEVC）、压缩音频/音频瘦身（media-compress-audio，mp3/m4a/flac）、视频转胶片图/16 帧拼图/视频帧理解（media-filmstrip）、视频转音频/提取音轨（media-to-audio）、音视频转字幕/SRT/字幕提取（media-transcribe，whisper.cpp 本地）、云端转写/豆包转字幕/语音转文字/听写/无需安装模型（doubao-media-transcribe，火山方舟 Ark doubao-seed 多模态，长音频自动分段并发）、音乐理解/音乐分析/歌曲分析/BGM 分析/音乐情感/音乐风格/配乐选曲/音乐适用场景/音乐 BPM/乐器识别/音乐分段结构（doubao-music-analysis，输出 JSON 音乐描述：风格/情感/BPM/调性/乐器/分段结构/视频适用场景/记忆点，支持文件夹批量）、AI 生图/文生图/参考图改图（image-gen，Azure gpt-image-2）、ModelScope 生图/千问生图/Qwen-Image 文生图/modelscope 网关出图（modelscope-image-gen）、AI 音乐生成/配乐/BGM/音效（suno-gen/suno-sound，Suno）。给人用也给 AI 用：所有命令支持 --json 机器可读输出。用户要求处理图片/视频/音频、压缩或加水印、把一批图片合并或转成一个 PDF、生成图像或音乐、提取字幕或音轨、分析理解一段音乐是什么风格情感适合什么视频时使用本 skill。
 ---
 
 # media-cli（@dkplus/media-cli）
@@ -33,6 +33,7 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 | 音乐理解/配乐选曲（JSON 描述音乐） | `doubao-music-analysis` | `--input <文件或文件夹>` `--output`（单文件默认 `<input>.music.json`，文件夹默认 `./music-analysis`）`--model <id>` `--segment-seconds <120>`（60–300，长曲切段粒度）`--concurrency <4>`（1–8）`--recursive` |
 | 文生图 | `image-gen --prompt <文案>` | `--size 1024x1024` `--output` `--quality` |
 | 参考图+文案改图/生图 | `image-gen --prompt ... --ref <图1> <图2>` | 多张参考图走 edits 端点；仅 jpg/jpeg/png/webp |
+| ModelScope/Qwen-Image 文生图 | `modelscope-image-gen --prompt <文案>` | `--model`（默认 `MODELSCOPE_IMAGE_MODEL`）`--size 1328x1328`（`WxH` 字符串）`--steps` `--guidance` `--seed` `--negative-prompt` `--output` |
 | 文生音乐/配乐/BGM | `suno-gen` | `--prompt <灵感>` **或** `--lyrics <歌词>`（二选一，互斥）；`--tags` `--title` `--instrumental` `--model` |
 | 文生音效 | `suno-sound --text <描述>` | `--tags` `--loop` `--model chirp-crow\|chirp-fenix` |
 | 查任务/补下载/查余额 | `suno-task --id` / `suno-download --id --output` / `suno-balance` | 恢复超时任务用 |
@@ -48,6 +49,7 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 | `doubao-media-transcribe` / `doubao-music-analysis` | `DOUBAO_API_KEY` + `DOUBAO_TRANSCRIBE_MODEL`（或每次传 `--model`）+ ffmpeg/ffprobe | 模型 id **无内置默认值**，两者都缺 → `E_CONFIG` 且不发请求；`DOUBAO_BASE_URL` 默认 `https://ark.cn-beijing.volces.com/api/v3`（`/api/compatible` 路径不存在，别填）；`DOUBAO_TIMEOUT_MS` 默认 120000（music-analysis 内部有 180s 超时下限） |
 | `media-cutout` | **仅 macOS 14+**；首次运行自动 `swiftc` 编译缓存（需 Xcode CLT）；`CUTOUT_BIN` 可覆盖 | 其他平台明确报错，勿在 Linux CI 使用 |
 | `image-gen` | `AZURE_IMAGE_KEY_POOL` + `AZURE_IMAGE_ENDPOINT_POOL`（英文逗号分隔，**按索引一一配对**） | `AZURE_IMAGE_DEPLOYMENT=gpt-image-2` `AZURE_IMAGE_OUTPUT_FORMAT=png` `AZURE_IMAGE_QUALITY=auto` 有默认 |
+| `modelscope-image-gen` | `MODELSCOPE_API_KEY` + `MODELSCOPE_IMAGE_MODEL`（或每次传 `--model`） | `MODELSCOPE_BASE_URL` 默认 `https://api-inference.modelscope.cn`（国际站 `api-inference.modelscope.ai`；末尾 `/v1` 会被自动剥掉）；`MODELSCOPE_TIMEOUT_MS=300000` `MODELSCOPE_POLL_INTERVAL_MS=2000` |
 | `suno-*` | `SUNO_API_KEY`（open.suno.cn） | `SUNO_BASE_URL`/`SUNO_TIMEOUT_MS` 可选 |
 
 ## 坑位与输出语义
@@ -67,4 +69,5 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 - 胶片图适合喂给多模态模型理解视频：一张图 16 帧、带 `mm:ss` 时间戳，可直接引用「00:42 处」。
 - 豆包（doubao）转写：**模型不返回逐句时间戳**，长音频按 silencedetect 静音点切段（默认 30s/段，硬上限 1.5 倍），SRT 段边界精确、段内各行按字数比例估算，多段结果会附 `E_TIMELINE_APPROXIMATE` 警告——要精确时间轴改用 `media-transcribe`。整段一次请求在 ~180s 会超时，命令内部已自动切段并发（默认 4），调用方无需干预；180s 音频实测约 9s 完成。`401/403 → E_CONFIG`（不重试），`429/5xx/超时`自动重试 2 次（400ms/1200ms 退避）；单段失败报 `E_PROVIDER_ERROR` 且 `details.segment/window` 指出是第几段（整条命令失败，不产出半成品字幕）。`--format txt` 只出纯文本、无 `data.cues`。
 - `doubao-music-analysis` 音乐理解：输出 JSON 音乐描述（isMusic/hasVocals/genre/emotion/tempo.bpm/key/instruments/structure 分段/videoFit 视频适用场景与剪辑建议/highlight 记忆点/oneLineSummary），`data.analysis` 与落盘文件同构。**分析比转写慢**（推理密集，45s 音乐约 50s、6 分钟约 2–3 分钟），≤240s 整曲单请求，更长曲子自动按 `--segment-seconds`（默认 120s）切段并发再合并，长曲分段边界会有轻微机械感属预期。模型时间戳是估算：structure 未覆盖到音频结尾时附 `E_TIMELINE_APPROXIMATE` 警告；输入疑似非音乐时附 `E_NOT_MUSIC` 警告（不失败，仍输出尽力描述）。文件夹批量逐文件容错（`data.failed[]`），`--recursive` 递归；模型实测能区分一次请求里的多段音频（本命令长曲切段即基于此能力）。转写与分析共用同一组 doubao 环境变量。
-- 错误码语义：`E_CONFIG` 配置缺失/非法 → 检查 env；`E_MISSING_DEPENDENCY` 外部二进制缺失 → `details.hint` 有安装提示；`E_PROVIDER_ERROR` 远端/进程失败 → `details.source` 标明来源（ffmpeg/whisper/vision/azure/suno）。
+- `modelscope-image-gen` 走 ModelScope API-Inference 网关，参数名以官方文档 AIGC 生图表为准：`--size` 传 **`WxH` 字符串**（网关不认 `width`/`height`，实测传这两个会被静默忽略出 760x1280；`928*1664` 星号格式被拒），`--steps` [1,100]、`--guidance` [1.5,20]、`--seed` [0,2^31-1]、`--negative-prompt`；Qwen-Image 分辨率档位 **[64x64, 1664x1664]**，可用模型清单见 https://www.modelscope.cn/aigc/models 。链路是提交 + 轮询 `{base}/v1/tasks/{id}`（`task_status` 取 `SUCCEED`/`FAILED`，图在顶层 `output_images[]`）；**提交响应会提前回 `SUCCEED` 但任务还在跑**，客户端已按「无图且有 task_id 就继续轮询」处理。结果图 URL 下载不带 apikey，输出永不含 key。`data.size` 是**真实解码像素**，与请求不一致时附 `E_SIZE_MISMATCH` 警告（说明该部署按自身档位调整了）。超时/失败报 `E_PROVIDER_ERROR` 且 `details.taskId` 可排查。
+- 错误码语义：`E_CONFIG` 配置缺失/非法 → 检查 env；`E_MISSING_DEPENDENCY` 外部二进制缺失 → `details.hint` 有安装提示；`E_PROVIDER_ERROR` 远端/进程失败 → `details.source` 标明来源（ffmpeg/whisper/vision/azure/suno/modelscope）。

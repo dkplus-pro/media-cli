@@ -119,6 +119,30 @@ node dist/media-cli.js --json image-gen --prompt "改成水彩风" --ref apple.p
 
 调度策略：每次请求随机选一个账号发起，401/403/429/5xx 自动轮换下一账号重试，全池失败报 `E_PROVIDER_ERROR`；400 类参数错误不轮换。任何输出都不含 key。
 
+### modelscope-image（ModelScope API-Inference 生图，Qwen-Image 系列）
+
+```bash
+# ~/.zshrc
+export MODELSCOPE_BASE_URL="https://api-inference.modelscope.cn"   # ModelScope token 对应域名；.ai 国际站同理
+export MODELSCOPE_API_KEY="ms-xxxxxxxx"                            # ModelScope 个人中心 → 访问令牌
+export MODELSCOPE_IMAGE_MODEL="Qwen/Qwen-Image-2.1"                # 默认模型名，--model 可覆盖
+node dist/media-cli.js --json modelscope-image-gen --prompt "一只红苹果" --output apple.png
+node dist/media-cli.js --json modelscope-image-gen --prompt "江南水乡" --size 1328x1328 --steps 40 --guidance 3.5 --seed 12345
+node dist/media-cli.js --json modelscope-image-gen --prompt "赛博城市" --negative-prompt "模糊, 低画质"
+```
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `MODELSCOPE_API_KEY` | 必填 | Bearer token；缺失报 `E_CONFIG` 且不发请求 |
+| `MODELSCOPE_IMAGE_MODEL` | 必填（或每次传 `--model`） | 模型 id，如 `Qwen/Qwen-Image-2.1`；可调用清单见 [AIGC 专区模型库](https://www.modelscope.cn/aigc/models) |
+| `MODELSCOPE_BASE_URL` | `https://api-inference.modelscope.cn` | 网关根地址（不含 `/v1`，误填 `/v1` 会被自动剥掉） |
+| `MODELSCOPE_TIMEOUT_MS` | `300000` | 单次 HTTP 与整体轮询的超时上限 |
+| `MODELSCOPE_POLL_INTERVAL_MS` | `2000` | 异步任务轮询间隔 |
+
+契约依据 [ModelScope API-Inference 官方文档](https://www.modelscope.cn/docs/model-service/API-Inference/intro) 的 AIGC 生图参数表：`model`/`prompt` 必填，`size` 是 **`"WxH"` 字符串**（不是 `width`/`height`；`"928*1664"` 会被网关拒：`size format should be WxH`），`steps` [1,100]、`guidance` [1.5,20]、`seed` [0,2^31-1]、`negative_prompt`、`image_url`（编辑类模型）、`loras`。分辨率档位按系列不同，**Qwen-Image 为 [64x64, 1664x1664]**。
+
+链路：`POST {base}/v1/images/generations`（带 `X-ModelScope-Async-Mode: true`）→ 拿 `task_id` → 轮询 `GET {base}/v1/tasks/{id}`（带 `X-ModelScope-Task-Type: image_generation`）→ `task_status` 为 `SUCCEED` 时取 `output_images[0]` 下载（下载**不携带 apikey**），`FAILED` 报 `E_PROVIDER_ERROR` 并带 `details.taskId`。也兼容 OpenAI 同步形态 `{ data: [{ b64_json | url }] }`。**实测坑位**：提交响应会提前回 `task_status: "SUCCEED"` 而任务其实还在跑，因此只要响应里没有图片且有 `task_id` 就一律以轮询结果为准。`data.size` 报的是**真实解码像素**（不是请求值），二者不一致时附 `E_SIZE_MISMATCH` 警告。
+
 ### media-cutout（本地抠图，macOS 14+）
 
 ```bash
