@@ -9,6 +9,29 @@ function isSupportedFile(p) {
   return SUPPORTED_EXTENSIONS.includes(path.extname(p).toLowerCase());
 }
 
+// 输入校验：返回是否为目录（既非文件也非目录 → E_INVALID_OPTION）
+export function resolveInput(input) {
+  if (!input) {
+    throw cliError("E_MISSING_ARGUMENT", "缺少必填 --input", { option: "--input" });
+  }
+  let info;
+  try {
+    info = statSync(input);
+  } catch {
+    throw cliError("E_MISSING_ARGUMENT", `输入不存在：${input}`, {
+      option: "--input",
+      value: input,
+    });
+  }
+  if (!info.isFile() && !info.isDirectory()) {
+    throw cliError("E_INVALID_OPTION", `输入既不是文件也不是目录：${input}`, {
+      option: "--input",
+      value: input,
+    });
+  }
+  return info.isDirectory();
+}
+
 // 输入枚举：单文件 / 文件夹一级 / --recursive 递归（对齐 media-cutout D16）
 // excludeUnder：跳过该目录（默认输出目录落在输入目录内时，防止二次运行吃到上次产物）
 export function enumerateInputs(input, { recursive = false, excludeUnder = null } = {}) {
@@ -24,7 +47,7 @@ export function enumerateInputs(input, { recursive = false, excludeUnder = null 
         },
       );
     }
-    return [input];
+    return [{ path: input, relative: path.basename(input) }];
   }
   if (!info.isDirectory()) {
     throw cliError("E_INVALID_OPTION", `输入既不是文件也不是目录：${input}`, {

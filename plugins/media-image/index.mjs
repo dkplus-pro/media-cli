@@ -1,44 +1,29 @@
-import { mkdirSync, statSync } from "node:fs";
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { compressOne } from "./lib/compress.mjs";
 import { cliError } from "./lib/errors.mjs";
-import { defaultSidecar, enumerateInputs } from "./lib/files.mjs";
+import { defaultSidecar, enumerateInputs, resolveInput } from "./lib/files.mjs";
 import { SUPPORTED_EXTENSIONS } from "./lib/format.mjs";
 import {
   parseAngle,
   parseColor,
+  parseDpi,
   parseFontSize,
+  parseImageFormat,
+  parseMargin,
   parseOpacity,
+  parseOrder,
+  parseOrientation,
+  parsePageSize,
   parseQuality,
   parseSpacing,
   parseText,
 } from "./lib/options.mjs";
+import { mergeToPdf } from "./lib/pdf-merge.mjs";
 import { loadSharp } from "./lib/sharp.mjs";
 import { createWatermarker } from "./lib/watermark.mjs";
 
-function resolveInput(input) {
-  if (!input) {
-    throw cliError("E_MISSING_ARGUMENT", "缺少必填 --input", { option: "--input" });
-  }
-  let info;
-  try {
-    info = statSync(input);
-  } catch {
-    throw cliError("E_MISSING_ARGUMENT", `输入不存在：${input}`, {
-      option: "--input",
-      value: input,
-    });
-  }
-  if (!info.isFile() && !info.isDirectory()) {
-    throw cliError("E_INVALID_OPTION", `输入既不是文件也不是目录：${input}`, {
-      option: "--input",
-      value: input,
-    });
-  }
-  return info.isDirectory();
-}
-
-// 两个命令共享的批量骨架：单文件直接处理，文件夹逐张处理（单张失败不中断，记入 failed）
+// compress/watermark 共享的批量骨架：单文件直接处理，文件夹逐张处理（单张失败不中断，记入 failed）
 async function runBatch(ctx, args, { defaultDirName, sidecarTag, processOne }) {
   const isDirectory = resolveInput(args.input);
   const outputDir = isDirectory ? path.resolve(ctx.cwd, args.output ?? defaultDirName) : null;
@@ -132,6 +117,22 @@ async function watermark(ctx, args) {
   return { ...echo, ...data };
 }
 
+async function toPdf(ctx, args) {
+  return mergeToPdf(ctx, {
+    input: args.input,
+    output: args.output,
+    recursive: Boolean(args.recursive),
+    skipBroken: Boolean(args.skipBroken),
+    order: parseOrder(args.order),
+    page: parsePageSize(args.page),
+    orientation: parseOrientation(args.orientation),
+    imageFormat: parseImageFormat(args.imageFormat),
+    dpi: parseDpi(args.dpi),
+    margin: parseMargin(args.margin),
+    quality: parseQuality(args.quality, 85),
+  });
+}
+
 export default {
   name: "media-image",
   version: "0.1.0",
@@ -176,6 +177,52 @@ export default {
         { flags: "--recursive", description: "文件夹输入时递归子目录（默认仅一级）" },
       ],
       handler: watermark,
+    },
+    {
+      name: "media-to-pdf",
+      description: "多张图片合并为一个 PDF（单文件出一页，文件夹内全部图片按文件名自然序合成多页）",
+      options: [
+        { flags: "--input <path>", description: "图片文件或文件夹（jpg/jpeg/png/webp）" },
+        {
+          flags: "--output <path>",
+          description: "输出 .pdf 路径（单文件默认 <name>.pdf，文件夹默认 <目录名>.pdf）",
+        },
+        {
+          flags: "--order <order>",
+          description:
+            "页面顺序：natural 文件名自然序，page2 在 page10 前（默认）| lexicographic 纯字典序",
+        },
+        {
+          flags: "--page <size>",
+          description: "页面尺寸：image 每页贴合图片（默认）| a4 | letter",
+        },
+        {
+          flags: "--orientation <mode>",
+          description: "固定页面时的页向：auto 随图片横竖自动（默认）| portrait | landscape",
+        },
+        {
+          flags: "--margin <pt>",
+          description: "固定页面四周留白磅值（默认 0，仅 --page a4|letter 生效）",
+        },
+        {
+          flags: "--dpi <72-1200>",
+          description: "像素到磅的换算密度（默认 300；--page image 决定页面物理尺寸）",
+        },
+        {
+          flags: "--image-format <fmt>",
+          description: "页内图片编码：jpeg（默认，透明压白底）| png（无损、保留透明）",
+        },
+        {
+          flags: "--quality <1-100>",
+          description: "jpeg 编码质量（默认 85；--image-format png 无效）",
+        },
+        {
+          flags: "--skip-broken",
+          description: "容忍无法解码的图片（默认任一张失败即整体报错且不落盘）",
+        },
+        { flags: "--recursive", description: "文件夹输入时递归子目录（默认仅一级）" },
+      ],
+      handler: toPdf,
     },
   ],
 };

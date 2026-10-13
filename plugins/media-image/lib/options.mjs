@@ -70,3 +70,48 @@ export function parseText(raw) {
   }
   return raw.trim();
 }
+
+function parseEnum(raw, allowed, option, fallback) {
+  if (raw === undefined) return fallback;
+  const value = String(raw).trim().toLowerCase();
+  if (!allowed.includes(value)) {
+    throw invalid(option, `只能是 ${allowed.join("|")} 之一`, raw);
+  }
+  return value;
+}
+
+function parseBoundedInt(raw, option, fallback, min, max, unit) {
+  if (raw === undefined) return fallback;
+  const n = Math.round(Number(raw));
+  if (!Number.isInteger(n) || n < min || n > max) {
+    throw invalid(option, `必须是 ${min}-${max} 的整数${unit}`, raw);
+  }
+  return n;
+}
+
+// 页面顺序：natural = 文件名自然序（page2 在 page10 前），lexicographic = 纯字典序
+export function parseOrder(raw) {
+  return parseEnum(raw, ["natural", "lexicographic"], "--order", "natural");
+}
+
+// 页面尺寸：image 贴合图片，a4/letter 固定页面
+export function parsePageSize(raw) {
+  return parseEnum(raw, ["image", "a4", "letter"], "--page", "image");
+}
+
+export function parseOrientation(raw) {
+  return parseEnum(raw, ["auto", "portrait", "landscape"], "--orientation", "auto");
+}
+
+// PDF 内图片编码：jpeg 体积小且不支持透明（自动压白底），png 保留细节与 alpha
+export function parseImageFormat(raw) {
+  return parseEnum(raw, ["jpeg", "png"], "--image-format", "jpeg");
+}
+
+export function parseDpi(raw) {
+  return parseBoundedInt(raw, "--dpi", 300, 72, 1200, "（像素每英寸）");
+}
+
+export function parseMargin(raw) {
+  return parseBoundedInt(raw, "--margin", 0, 0, 200, "（磅 pt，仅固定页面生效）");
+}

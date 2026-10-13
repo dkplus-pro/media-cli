@@ -130,7 +130,7 @@ node dist/media-cli.js --json media-cutout --input photo.jpg --no-crop          
 
 引擎为 Apple Vision framework（与系统「拷贝主体」同款分割，ANE 加速单张约 0.2s）。首次运行用 `swiftc` 自动编译工具并缓存到 `~/.media-cli/cache/media-cutout/`（源码变更自动重编译；`CUTOUT_BIN` 可指向现成二进制跳过编译）。仅支持 macOS 14+，其他平台报 `E_MISSING_DEPENDENCY`。支持 jpg/jpeg/png/webp；文件夹批量时单张失败不影响其余（失败项记入 `data.failed`）。
 
-### media-image（图片压缩 / 文字水印，基于 sharp，无外部依赖）
+### media-image（图片压缩 / 文字水印 / 合并 PDF，基于 sharp + pdf-lib，无外部依赖）
 
 ```bash
 # 压缩体积：不改变分辨率、不转格式；默认旁路输出不覆盖原图
@@ -140,9 +140,16 @@ node dist/media-cli.js --json media-compress --input 图册/ --output min/ --qua
 # 平铺斜角文字水印：默认 30°、透明度 0.3、间距 80px，字体/字号/颜色可调
 node dist/media-cli.js --json media-watermark --input photo.jpg --text "版权所有" --font "PingFang SC"
 node dist/media-cli.js --json media-watermark --input 图册/ --text "DO NOT COPY" --angle 30 --spacing 80 --opacity 0.3 --recursive
+
+# 合并 PDF：整个目录合成一个多页 PDF，页面顺序默认按文件名自然序（p2 在 p10 前）
+node dist/media-cli.js --json media-to-pdf --input photo.jpg                          # 单文件 → photo.pdf（一页）
+node dist/media-cli.js --json media-to-pdf --input 扫描件/                            # → ./扫描件.pdf，逐张一页
+node dist/media-cli.js --json media-to-pdf --input 图册/ --output 相册.pdf --page a4 --margin 24 --quality 80
 ```
 
 支持 jpg/jpeg/png/webp；文件夹批量时单张失败不影响其余（失败项记入 `data.failed`）。压缩结果不比原图小时跳过落盘（`skipped: true`），原图永不变大；PNG 为无损优化（不量化），要明显减体积请压 jpg/webp。带 EXIF 方向的图会先摆正到像素再处理。水印文字经 SVG 渲染（sharp 内置，无需 fontconfig 配置），字体由系统字体库解析，缺失时回退默认字体；输出重编码用高画质（jpeg 92 / webp 90 / png 无损）。
+
+`media-to-pdf` 与其他批量命令语义不同：一个目录出**一个** PDF（不是逐张产物），默认每页贴合该图尺寸（像素按 `--dpi` 换算，默认 300dpi），也可用 `--page a4|letter` + `--margin` 固定纸张、`--orientation auto` 让横图自动出横页。页内图片默认重编码为 jpeg（透明区域压白底），`--image-format png` 可保留 alpha。**默认任一张图解码失败即整体报 `E_PROVIDER_ERROR` 且不写出半成品 PDF**，确认能丢页时加 `--skip-broken`（跳过项计入 `data.skipped`，并附 `E_PARTIAL_INPUT` 警告）。
 
 ### suno-music（文生音乐 / 文生音效，open.suno.cn）
 
