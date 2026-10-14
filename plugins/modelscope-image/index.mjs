@@ -7,6 +7,22 @@ import { cliError } from "./lib/errors.mjs";
 
 const SIZE_RE = /^\d{3,4}x\d{3,4}$/;
 
+// 实测网关：每边 [64, 2048]（超界在提交期即 400，如 "width must be integer in [64,2048]"）。
+// Qwen-Image-2.1 卡片推荐的 2400/2528/2752 长边是本地 diffusers 管线，经网关会被拒
+const EDGE_MIN = 64;
+const EDGE_MAX = 2048;
+
+// 卡片 7 个比例映射到网关可用尺寸：比例精确、每边 ≤2048、且都是 16 的倍数
+const RATIOS = {
+  "1:1": "2048x2048",
+  "4:3": "2048x1536",
+  "3:4": "1536x2048",
+  "3:2": "2016x1344",
+  "2:3": "1344x2016",
+  "16:9": "2048x1152",
+  "9:16": "1152x2048",
+};
+
 function parseSize(size) {
   // 网关要求 "WxH"（实测 "928*1664" 会被拒：size format should be WxH）
   if (!SIZE_RE.test(size)) {
@@ -14,6 +30,31 @@ function parseSize(size) {
       option: "--size",
       value: size,
     });
+  }
+  const [width, height] = size.split("x").map(Number);
+  for (const [edge, name] of [
+    [width, "width"],
+    [height, "height"],
+  ]) {
+    if (edge < EDGE_MIN || edge > EDGE_MAX) {
+      throw cliError(
+        "E_INVALID_OPTION",
+        `--size 的 ${name} 必须在 ${EDGE_MIN}–${EDGE_MAX} 之间（网关实测边界），得到 ${size}`,
+        { option: "--size", value: size },
+      );
+    }
+  }
+  return size;
+}
+
+function sizeFromRatio(ratio) {
+  const size = RATIOS[ratio];
+  if (size === undefined) {
+    throw cliError(
+      "E_INVALID_OPTION",
+      `--ratio 只支持 ${Object.keys(RATIOS).join(" | ")}，得到 ${ratio}`,
+      { option: "--ratio", value: ratio },
+    );
   }
   return size;
 }
@@ -57,11 +98,34 @@ function parseRefUrl(value) {
   return value;
 }
 
+// Qwen-Image-2.1 卡片：单次最多 10 张参考图
+function parseRefUrls(values) {
+  const list = Array.isArray(values) ? values : [values];
+  if (list.length === 0) {
+    throw cliError("E_INVALID_OPTION", "--ref 至少需要一个 URL", { option: "--ref" });
+  }
+  if (list.length > 10) {
+    throw cliError("E_INVALID_OPTION", `--ref 最多 10 张参考图，得到 ${list.length} 张`, {
+      option: "--ref",
+      value: list.length,
+    });
+  }
+  return list.map(parseRefUrl);
+}
+
 async function modelscopeImageGen(ctx, args) {
   if (typeof args.prompt !== "string" || args.prompt.trim() === "") {
     throw cliError("E_MISSING_ARGUMENT", "缺少必填 --prompt", { option: "--prompt" });
   }
-  const size = parseSize(args.size ?? "1024x1024");
+  if (args.size !== undefined && args.ratio !== undefined) {
+    throw cliError("E_INVALID_OPTION", "--size 与 --ratio 二选一", {
+      option: "--ratio",
+      value: args.ratio,
+    });
+  }
+  const size = parseSize(
+    args.size ?? (args.ratio === undefined ? "1024x1024" : sizeFromRatio(args.ratio)),
+  );
   const steps =
     args.steps === undefined
       ? undefined
@@ -78,7 +142,7 @@ async function modelscopeImageGen(ctx, args) {
           max: 2147483647,
           integer: true,
         });
-  const imageUrl = args.ref === undefined ? undefined : parseRefUrl(args.ref);
+  const refUrls = args.ref === undefined ? undefined : parseRefUrls(args.ref);
 
   // 配置校验必须先于任何网络请求
   const config = loadConfig();
@@ -97,7 +161,7 @@ async function modelscopeImageGen(ctx, args) {
     steps,
     guidance,
     seed,
-    imageUrl,
+    refUrls,
   });
 
   const buf = await fetchImageBytes(config, result);
@@ -138,7 +202,8 @@ async function modelscopeImageGen(ctx, args) {
     bytes: buf.length,
     model,
     size: actual ?? requested,
-    ...(imageUrl === undefined ? {} : { refUrl: imageUrl }),
+    keyIndex: result.keyIndex,
+    ...(refUrls === undefined ? {} : { refUrls }),
     ...(result.url !== undefined ? { sourceUrl: result.url } : {}),
     ...(result.taskId !== undefined ? { taskId: result.taskId } : {}),
   };
@@ -160,16 +225,20 @@ export default {
         },
         {
           flags: "--size <WxH>",
-          description: "尺寸，WxH 字符串（默认 1024x1024；Qwen-Image 档位上限 1664x1664）",
+          description: "尺寸，WxH 字符串（默认 1024x1024；网关实测每边 [64,2048]）",
+        },
+        {
+          flags: "--ratio <name>",
+          description: `按比例出图，映射到网关可用的最大档（${Object.keys(RATIOS).join("|")}），与 --size 二选一`,
         },
         { flags: "--steps <n>", description: "采样步数（可选，1-100）" },
         { flags: "--guidance <n>", description: "提示词引导系数（可选，1.5-20）" },
         { flags: "--seed <n>", description: "随机种子（可选，0-2147483647，同 seed 可复现）" },
         { flags: "--negative-prompt <text>", description: "负向提示词（可选）" },
         {
-          flags: "--ref <url>",
+          flags: "--ref <urls...>",
           description:
-            "参考图公网 URL（可选，走图生图/编辑；本地文件先用 tencent-cos-upload 换 URL）",
+            "参考图公网 URL，可传多张（上限 10，走图生图/多图参考编辑；本地文件先用 tencent-cos-upload 换 URL）",
         },
         {
           flags: "--output <path>",

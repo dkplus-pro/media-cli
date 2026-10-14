@@ -1,92 +1,9 @@
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
-import { createServer, type Server } from "node:http";
-import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { type CliRun, cli } from "./helpers/cli.ts";
-
-const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4]);
-
-// 真实 8x16 PNG：用于校验 data.size 取真实像素而非请求值
-const REAL_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAQCAYAAAArij59AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAAFklEQVQokWP4z8DwHx9lGFXwfwSFAwAJef8BqE9SmQAAAABJRU5ErkJggg==",
-  "base64",
-);
-
-interface MockRequest {
-  method: string;
-  path: string;
-  key: string;
-  body: string;
-}
-
-interface Mock {
-  endpoint: string;
-  requests: MockRequest[];
-  close: () => Promise<void>;
-}
-
-// 本地 mock：路由交由 behavior 决定；key 用于区分「是否携带了不该携带的凭证」
-function startMock(
-  behavior: (req: MockRequest, endpoint: string) => { status: number; body: unknown },
-): Promise<Mock> {
-  return new Promise((resolve) => {
-    const requests: MockRequest[] = [];
-    const server: Server = createServer((req, res) => {
-      const chunks: Buffer[] = [];
-      req.on("data", (c: Buffer) => chunks.push(c));
-      req.on("end", () => {
-        const rawUrl = req.url ?? "";
-        const item: MockRequest = {
-          method: req.method ?? "",
-          path: rawUrl.split("?")[0],
-          key: (req.headers.authorization ?? "").replace("Bearer ", ""),
-          body: Buffer.concat(chunks).toString("utf8"),
-        };
-        requests.push(item);
-        const reply = behavior(item, `http://127.0.0.1:${(server.address() as AddressInfo).port}`);
-        const payload =
-          reply.body === "PNG" ? PNG_BYTES : JSON.stringify(reply.body ?? { error: "empty" });
-        res.writeHead(reply.status, {
-          "content-type": reply.body === "PNG" ? "image/png" : "application/json",
-        });
-        res.end(payload);
-      });
-    });
-    server.listen(0, "127.0.0.1", () => {
-      const port = (server.address() as AddressInfo).port;
-      resolve({
-        endpoint: `http://127.0.0.1:${port}`,
-        requests,
-        close: () => new Promise((r) => server.close(r)),
-      });
-    });
-  });
-}
-
-function msEnv(endpoint: string, extra: Record<string, string> = {}): Record<string, string> {
-  return {
-    MODELSCOPE_BASE_URL: endpoint,
-    MODELSCOPE_API_KEY: "ms-test-secret-key",
-    MODELSCOPE_IMAGE_MODEL: "Qwen/Qwen-Image-2.1",
-    MODELSCOPE_POLL_INTERVAL_MS: "10",
-    MODELSCOPE_TIMEOUT_MS: "5000",
-    ...extra,
-  };
-}
-
-function parseError(r: CliRun): {
-  code: string;
-  message: string;
-  details?: Record<string, unknown>;
-} {
-  return (
-    JSON.parse(r.stdout) as {
-      error: { code: string; message: string; details?: Record<string, unknown> };
-    }
-  ).error;
-}
+import { cli } from "./helpers/cli.ts";
+import { msEnv, PNG_BYTES, REAL_PNG, startMock } from "./helpers/modelscope-mock.ts";
 
 describe("modelscope-image e2e（本地 mock）", () => {
   let dir: string;
@@ -213,7 +130,7 @@ describe("modelscope-image e2e（本地 mock）", () => {
     }
   });
 
-  it("文档化参数全量透传：size/steps/guidance/seed/negative_prompt/ref→image_url", async () => {
+  it("文档化参数全量透传：size/steps/guidance/seed/negative_prompt", async () => {
     const mock = await startMock(() => ({
       status: 200,
       body: { data: [{ b64_json: PNG_BYTES.toString("base64") }] },
@@ -238,8 +155,6 @@ describe("modelscope-image e2e（本地 mock）", () => {
           "12345",
           "--negative-prompt",
           "blurry",
-          "--ref",
-          "https://cdn.ai4love.cn/tmp/a.png",
           "--output",
           out,
         ],
@@ -254,9 +169,43 @@ describe("modelscope-image e2e（本地 mock）", () => {
         guidance: 3.5,
         seed: 12345,
         negative_prompt: "blurry",
-        image_url: "https://cdn.ai4love.cn/tmp/a.png",
       });
-      expect(JSON.parse(r.stdout).data.refUrl).toBe("https://cdn.ai4love.cn/tmp/a.png");
+      expect(JSON.parse(r.stdout).data.refUrls).toBeUndefined();
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("--ratio 映射到网关可用的最大档（比例精确、每边 ≤2048）", async () => {
+    const mock = await startMock(() => ({
+      status: 200,
+      body: { data: [{ b64_json: PNG_BYTES.toString("base64") }] },
+    }));
+    try {
+      const cases = {
+        "1:1": "2048x2048",
+        "16:9": "2048x1152",
+        "9:16": "1152x2048",
+        "3:2": "2016x1344",
+      };
+      for (const [ratio, size] of Object.entries(cases)) {
+        const r = await cli(
+          [
+            "--json",
+            "modelscope-image-gen",
+            "--prompt",
+            "x",
+            "--ratio",
+            ratio,
+            "--output",
+            path.join(dir, `ratio-${ratio.replace(":", "-")}.png`),
+          ],
+          msEnv(mock.endpoint),
+        );
+        expect(r.code).toBe(0);
+        expect(JSON.parse(mock.requests[mock.requests.length - 1].body).size).toBe(size);
+        expect(JSON.parse(r.stdout).data.size).toBe(size);
+      }
     } finally {
       await mock.close();
     }
@@ -286,121 +235,6 @@ describe("modelscope-image e2e（本地 mock）", () => {
       expect(parsed.data.taskId).toBe("instant-1");
       expect((await readFile(out)).equals(PNG_BYTES)).toBe(true);
       expect(mock.requests.map((q) => q.path)).toEqual(["/v1/images/generations", "/i.png"]);
-    } finally {
-      await mock.close();
-    }
-  });
-
-  it("缺 key / 缺 model → E_CONFIG 且不发请求", async () => {
-    const mock = await startMock(() => ({ status: 200, body: {} }));
-    try {
-      const noKey = await cli(["--json", "modelscope-image-gen", "--prompt", "x"], {
-        ...msEnv(mock.endpoint),
-        MODELSCOPE_API_KEY: "",
-      });
-      expect(noKey.code).toBe(3);
-      expect(parseError(noKey).code).toBe("E_CONFIG");
-
-      const noModel = await cli(["--json", "modelscope-image-gen", "--prompt", "x"], {
-        ...msEnv(mock.endpoint),
-        MODELSCOPE_IMAGE_MODEL: "",
-      });
-      expect(noModel.code).toBe(3);
-      expect(parseError(noModel).code).toBe("E_CONFIG");
-      expect(mock.requests).toHaveLength(0);
-    } finally {
-      await mock.close();
-    }
-  });
-
-  it("401 报错：E_PROVIDER_ERROR 且不泄漏 apikey", async () => {
-    const mock = await startMock(() => ({
-      status: 401,
-      body: { errors: { message: "Authentication failed, ms-test-secret-key leaked?" } },
-    }));
-    try {
-      const r = await cli(
-        ["--json", "modelscope-image-gen", "--prompt", "x"],
-        msEnv(mock.endpoint),
-      );
-      expect(r.code).toBe(3);
-      expect(parseError(r).code).toBe("E_PROVIDER_ERROR");
-      expect(r.stdout + r.stderr).not.toContain("ms-test-secret-key");
-    } finally {
-      await mock.close();
-    }
-  });
-
-  it("任务失败状态 → E_PROVIDER_ERROR 带 taskId", async () => {
-    const mock = await startMock((req) =>
-      req.path === "/v1/images/generations"
-        ? { status: 200, body: { task_status: "PENDING", task_id: "task-99" } }
-        : {
-            status: 200,
-            body: { task_status: "FAILED", task_id: "task-99", message: "model unavailable" },
-          },
-    );
-    try {
-      const r = await cli(
-        ["--json", "modelscope-image-gen", "--prompt", "x"],
-        msEnv(mock.endpoint),
-      );
-      expect(r.code).toBe(3);
-      const err = parseError(r);
-      expect(err.code).toBe("E_PROVIDER_ERROR");
-      expect(err.details?.taskId).toBe("task-99");
-    } finally {
-      await mock.close();
-    }
-  });
-
-  it("用法错误：缺 --prompt 与 --size 非法（退出码 2，不发请求）", async () => {
-    const mock = await startMock(() => ({ status: 200, body: {} }));
-    try {
-      const noPrompt = await cli(["--json", "modelscope-image-gen"], msEnv(mock.endpoint));
-      expect(noPrompt.code).toBe(2);
-      expect(parseError(noPrompt).code).toBe("E_MISSING_ARGUMENT");
-
-      const badSize = await cli(
-        ["--json", "modelscope-image-gen", "--prompt", "x", "--size", "1024"],
-        msEnv(mock.endpoint),
-      );
-      expect(badSize.code).toBe(2);
-      expect(parseError(badSize).code).toBe("E_INVALID_OPTION");
-
-      const badSteps = await cli(
-        ["--json", "modelscope-image-gen", "--prompt", "x", "--steps", "abc"],
-        msEnv(mock.endpoint),
-      );
-      expect(badSteps.code).toBe(2);
-      expect(parseError(badSteps).code).toBe("E_INVALID_OPTION");
-
-      // 网关只收 "WxH"（实测 "928*1664" 被拒），本地先拦
-      const starSize = await cli(
-        ["--json", "modelscope-image-gen", "--prompt", "x", "--size", "928*1664"],
-        msEnv(mock.endpoint),
-      );
-      expect(starSize.code).toBe(2);
-      expect(parseError(starSize).code).toBe("E_INVALID_OPTION");
-
-      // 文档 guidance 范围 [1.5, 20]
-      const badGuidance = await cli(
-        ["--json", "modelscope-image-gen", "--prompt", "x", "--guidance", "1"],
-        msEnv(mock.endpoint),
-      );
-      expect(badGuidance.code).toBe(2);
-      expect(parseError(badGuidance).code).toBe("E_INVALID_OPTION");
-
-      // --ref 只收公网 http(s) URL：本地路径不做隐式上传
-      for (const badRef of ["/tmp/a.png", "./a.png", "ftp://cdn/a.png"]) {
-        const badRefRun = await cli(
-          ["--json", "modelscope-image-gen", "--prompt", "x", "--ref", badRef],
-          msEnv(mock.endpoint),
-        );
-        expect(badRefRun.code).toBe(2);
-        expect(parseError(badRefRun).code).toBe("E_INVALID_OPTION");
-      }
-      expect(mock.requests).toHaveLength(0);
     } finally {
       await mock.close();
     }

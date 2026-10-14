@@ -1,61 +1,100 @@
+import { describeFailure, reasonOfText, requestIdOf, scrub } from "./error-text.mjs";
 import { cliError } from "./errors.mjs";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function scrub(text, key) {
-  return key && key.length >= 8 ? text.split(key).join("***") : text;
-}
+// 换 key 才有意义的失败：鉴权失效（key 被吊销/过期）与按 key 计的限流；5xx 与网络抖动一并重试
+const ROTATE_STATUS = new Set([401, 403, 429]);
 
-async function requestJson(config, url, init) {
-  const headers = { authorization: `Bearer ${config.key}`, ...init.headers };
+// 请求层不抛错：由调用方按 transport/status 决定换 key、续等还是直接失败
+async function tryRequestJson(config, url, init, key) {
   let res;
   try {
-    res = await fetch(url, { ...init, headers, signal: AbortSignal.timeout(config.timeoutMs) });
+    res = await fetch(url, {
+      ...init,
+      headers: { authorization: `Bearer ${key}`, ...init.headers },
+      signal: AbortSignal.timeout(config.timeoutMs),
+    });
   } catch (err) {
-    throw cliError(
-      "E_PROVIDER_ERROR",
-      `modelscope 请求失败：${scrub(String(err?.message ?? err), config.key)}`,
-      {
-        source: "modelscope",
-        url,
-      },
-    );
+    return { ok: false, transport: "network", status: 0, text: String(err?.message ?? err) };
   }
   const text = await res.text().catch(() => "");
-  if (!res.ok) {
-    throw cliError("E_PROVIDER_ERROR", `modelscope 请求失败（HTTP ${res.status}）`, {
-      source: "modelscope",
-      status: res.status,
-      body: scrub(text.slice(0, 300), config.key),
-    });
-  }
+  if (!res.ok) return { ok: false, transport: "http", status: res.status, text };
   try {
-    return JSON.parse(text);
+    return { ok: true, json: JSON.parse(text) };
   } catch {
-    throw cliError("E_PROVIDER_ERROR", "modelscope 响应不是合法 JSON", {
+    return { ok: false, transport: "malformed", status: res.status, text };
+  }
+}
+
+// 参数类 4xx：换 key 无意义，直接收敛为一次失败
+function isFatalHttp(got) {
+  return (
+    got.transport === "http" &&
+    !ROTATE_STATUS.has(got.status) &&
+    got.status < 500 &&
+    got.status !== 0
+  );
+}
+
+function httpError(config, got, extra) {
+  if (got.transport === "malformed") {
+    return cliError("E_PROVIDER_ERROR", "modelscope 响应不是合法 JSON", {
       source: "modelscope",
-      body: scrub(text.slice(0, 300), config.key),
+      body: scrub(got.text.slice(0, 300), config.keys),
+      ...extra,
     });
   }
+  const reason = reasonOfText(got.text);
+  return cliError(
+    "E_PROVIDER_ERROR",
+    `modelscope 请求失败（HTTP ${got.status}）${reason === "" ? "" : `：${reason}`}`,
+    {
+      source: "modelscope",
+      ...(got.status === 0 ? {} : { status: got.status }),
+      body: scrub(got.text.slice(0, 300), config.keys),
+      ...extra,
+    },
+  );
 }
 
-function requireKey(config) {
-  if (config.key === "") {
-    throw cliError("E_CONFIG", "缺少环境变量 MODELSCOPE_API_KEY", { var: "MODELSCOPE_API_KEY" });
+// 提交期在 key 池内随机起点、逐个重试；返回提交成功的那把 key 的下标
+async function submitGeneration(config, body) {
+  const total = config.keys.length;
+  const start = Math.floor(Math.random() * total);
+  const attempts = [];
+  for (let i = 0; i < total; i++) {
+    const keyIndex = (start + i) % total;
+    const got = await tryRequestJson(
+      config,
+      `${config.baseUrl}/v1/images/generations`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-modelscope-async-mode": "true" },
+        body: JSON.stringify(body),
+      },
+      config.keys[keyIndex],
+    );
+    if (got.ok) return { json: got.json, keyIndex };
+    if (got.transport === "malformed") throw httpError(config, got);
+    const reason = reasonOfText(got.text);
+    attempts.push({
+      keyIndex,
+      ...(got.status === 0 ? {} : { status: got.status }),
+      message: scrub(reason, config.keys),
+    });
+    if (isFatalHttp(got)) throw httpError(config, got, { attempts });
   }
-}
-
-// 参数名以 ModelScope API-Inference 官方文档的 AIGC 生图表为准：
-// size 是 "WxH" 字符串（非 width/height），steps/guidance/seed/negative_prompt；
-// 编辑类模型（Qwen-Image-2.1 同时是文生图与图像编辑模型）用 image_url 传参考图
-function buildSubmitBody({ model, prompt, size, negativePrompt, steps, guidance, seed, imageUrl }) {
-  const body = { model, prompt, size };
-  if (negativePrompt !== undefined) body.negative_prompt = negativePrompt;
-  if (steps !== undefined) body.steps = steps;
-  if (guidance !== undefined) body.guidance = guidance;
-  if (seed !== undefined) body.seed = seed;
-  if (imageUrl !== undefined) body.image_url = imageUrl;
-  return body;
+  const last = attempts[attempts.length - 1];
+  throw cliError(
+    "E_PROVIDER_ERROR",
+    `modelscope ${total} 把 key 均不可用${last?.message ? `：${last.message}` : ""}`,
+    {
+      source: "modelscope",
+      keyCount: total,
+      attempts,
+    },
+  );
 }
 
 const FAILED = ["failed", "error", "canceled", "cancelled", "invalid", "timed_out"];
@@ -91,91 +130,100 @@ function resolveResponse(json) {
   if (images.length > 0) return { kind: "ready", taskId, images };
   const status = statusOf(json);
   if (FAILED.includes(status)) {
+    // 失败载荷形态不统一：可能在 message / errors（对象或数组）/ 顶层，统一交给 describeFailure 摊平
     return {
       kind: "failed",
       status,
       taskId,
-      message: json?.message ?? json?.errors ?? "任务失败",
+      message: json?.message ?? json?.errors ?? json?.logs ?? json,
+      payload: json,
     };
   }
   if (taskId !== undefined) return { kind: "pending", status, taskId };
   if (DONE.includes(status)) {
-    return { kind: "failed", status, taskId, message: "任务已完成但响应中没有图片数据" };
+    return {
+      kind: "failed",
+      status,
+      taskId,
+      message: "任务已完成但响应中没有图片数据",
+      payload: json,
+    };
   }
   return { kind: "pending", status, taskId };
 }
 
 function taskFailed(config, result) {
+  const reason = (describeFailure(result.message) || "任务失败").slice(0, 300);
+  const requestId = requestIdOf(result.payload);
   throw cliError(
     "E_PROVIDER_ERROR",
-    `modelscope 任务失败（status=${result.status || "unknown"}）`,
+    `modelscope 任务失败（status=${result.status || "unknown"}）：${scrub(reason, config.keys)}`,
     {
       source: "modelscope",
       ...(result.taskId === undefined ? {} : { taskId: result.taskId }),
-      message: scrub(String(result.message), config.key),
+      ...(requestId === undefined ? {} : { requestId }),
+      message: scrub(reason, config.keys),
+      // 原文兜底：网关哪天换错误结构时不至于什么信息都拿不到
+      raw: scrub(JSON.stringify(result.payload ?? null), config.keys).slice(0, 800),
     },
   );
 }
 
-async function pollTask(config, taskId, deadline) {
+function timeoutError(taskId) {
+  return cliError("E_PROVIDER_ERROR", "modelscope 任务等待超时", {
+    source: "modelscope",
+    taskId,
+    hint: "任务可能仍在运行；积分/算力已占用，勿盲目重发",
+  });
+}
+
+// 任务只属于提交它的那个账号，所以轮询固定用同一把 key，不轮换
+async function pollTask(config, taskId, keyIndex, deadline) {
   const url = `${config.baseUrl}/v1/tasks/${encodeURIComponent(taskId)}`;
   for (;;) {
-    const result = resolveResponse(
-      await requestJson(config, url, { headers: { "x-modelscope-task-type": "image_generation" } }),
+    const got = await tryRequestJson(
+      config,
+      url,
+      { headers: { "x-modelscope-task-type": "image_generation" } },
+      config.keys[keyIndex],
     );
-    if (result.kind === "failed") taskFailed(config, result);
-    if (result.kind === "ready") return result;
-    if (Date.now() + config.pollIntervalMs > deadline) {
-      throw cliError("E_PROVIDER_ERROR", "modelscope 任务等待超时", {
-        source: "modelscope",
-        taskId,
-        hint: "任务可能仍在运行；积分/算力已占用，勿盲目重发",
-      });
+    if (!got.ok) {
+      // 轮询期的限流/抖动不该作废一次已付费的生成：同一把 key 续等，由 deadline 收敛
+      if (got.transport === "malformed" || isFatalHttp(got)) {
+        throw httpError(config, got, { taskId });
+      }
+    } else {
+      const result = resolveResponse(got.json);
+      if (result.kind === "failed") taskFailed(config, result);
+      if (result.kind === "ready") return result;
     }
+    if (Date.now() + config.pollIntervalMs > deadline) throw timeoutError(taskId);
     await sleep(config.pollIntervalMs);
   }
 }
 
+function singleImage(images, taskId, keyIndex) {
+  if (images.length > 1) {
+    throw cliError("E_PROVIDER_ERROR", `modelscope 返回 ${images.length} 张图，本命令只支持单图`, {
+      source: "modelscope",
+    });
+  }
+  return { ...images[0], taskId, keyIndex };
+}
+
 export async function generateImage(config, options) {
-  requireKey(config);
-  const json = await requestJson(config, `${config.baseUrl}/v1/images/generations`, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-modelscope-async-mode": "true" },
-    body: JSON.stringify(buildSubmitBody(options)),
-  });
+  const { json, keyIndex } = await submitGeneration(config, buildSubmitBody(options));
   const submitted = resolveResponse(json);
   if (submitted.kind === "failed") taskFailed(config, submitted);
-
-  const deadline = Date.now() + config.timeoutMs;
-  if (submitted.kind === "ready") {
-    if (submitted.images.length > 1) {
-      throw cliError(
-        "E_PROVIDER_ERROR",
-        `modelscope 返回 ${submitted.images.length} 张图，本命令只支持单图`,
-        {
-          source: "modelscope",
-        },
-      );
-    }
-    return { ...submitted.images[0], taskId: submitted.taskId };
-  }
+  if (submitted.kind === "ready") return singleImage(submitted.images, submitted.taskId, keyIndex);
   if (submitted.taskId === undefined) {
     throw cliError("E_PROVIDER_ERROR", "modelscope 响应缺少 task_id 与图片数据", {
       source: "modelscope",
-      body: scrub(JSON.stringify(json).slice(0, 300), config.key),
+      body: scrub(JSON.stringify(json).slice(0, 300), config.keys),
     });
   }
-  const done = await pollTask(config, submitted.taskId, deadline);
-  if (done.images.length > 1) {
-    throw cliError(
-      "E_PROVIDER_ERROR",
-      `modelscope 返回 ${done.images.length} 张图，本命令只支持单图`,
-      {
-        source: "modelscope",
-      },
-    );
-  }
-  return { ...done.images[0], taskId: submitted.taskId };
+  const done = await pollTask(config, submitted.taskId, keyIndex, Date.now() + config.timeoutMs);
+  return singleImage(done.images, submitted.taskId, keyIndex);
 }
 
 export async function fetchImageBytes(config, ref) {
@@ -197,4 +245,15 @@ export async function fetchImageBytes(config, ref) {
     });
   }
   return Buffer.from(await res.arrayBuffer());
+}
+
+function buildSubmitBody({ model, prompt, size, negativePrompt, steps, guidance, seed, refUrls }) {
+  const body = { model, prompt, size };
+  if (negativePrompt !== undefined) body.negative_prompt = negativePrompt;
+  if (steps !== undefined) body.steps = steps;
+  if (guidance !== undefined) body.guidance = guidance;
+  if (seed !== undefined) body.seed = seed;
+  // 单图传字符串、多图传 URL 数组（实测两张数组各图特征都被消费，模型卡片称上限 10 张）
+  if (refUrls !== undefined) body.image_url = refUrls.length === 1 ? refUrls[0] : refUrls;
+  return body;
 }

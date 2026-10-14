@@ -125,28 +125,52 @@ node dist/media-cli.js --json image-gen --prompt "改成水彩风" --ref apple.p
 # ~/.zshrc
 export MODELSCOPE_BASE_URL="https://api-inference.modelscope.cn"   # ModelScope token 对应域名；.ai 国际站同理
 export MODELSCOPE_API_KEY="ms-xxxxxxxx"                            # ModelScope 个人中心 → 访问令牌
+export MODELSCOPE_KEY_POOL="ms-aaaa,ms-bbbb"                       # 可选：多 token 池（逗号分隔），覆盖上面的单 key
 export MODELSCOPE_IMAGE_MODEL="Qwen/Qwen-Image-2.1"                # 默认模型名，--model 可覆盖
 node dist/media-cli.js --json modelscope-image-gen --prompt "一只红苹果" --output apple.png
 node dist/media-cli.js --json modelscope-image-gen --prompt "江南水乡" --size 1328x1328 --steps 40 --guidance 3.5 --seed 12345
 node dist/media-cli.js --json modelscope-image-gen --prompt "赛博城市" --negative-prompt "模糊, 低画质"
 node dist/media-cli.js --json modelscope-image-gen --prompt "把背景换成海边日落" --ref "$(node dist/media-cli.js --json tencent-cos-upload --file a.png | sed -n 's/.*"url":"\([^"]*\)".*/\1/p')"
+# 多图参考：--ref 后面直接跟多个 URL（上限 10 张）
+node dist/media-cli.js --json modelscope-image-gen --prompt "把两个水果并排放在白桌面上，保持各自细节" \
+  --ref https://cdn.example.com/tmp/apple.png https://cdn.example.com/tmp/watermelon.png --output two.png
+# 按比例出图（映射到网关可用的最大档，与 --size 二选一）
+node dist/media-cli.js --json modelscope-image-gen --prompt "全景山景" --ratio 16:9
 ```
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
-| `MODELSCOPE_API_KEY` | 必填 | Bearer token；缺失报 `E_CONFIG` 且不发请求 |
+| `MODELSCOPE_API_KEY` | 必填（或设 `MODELSCOPE_KEY_POOL`） | Bearer token；两者都缺失报 `E_CONFIG` 且不发请求 |
+| `MODELSCOPE_KEY_POOL` | 未设则用单 key | 逗号分隔的多个 token（自动 trim），设置后覆盖 `MODELSCOPE_API_KEY` |
 | `MODELSCOPE_IMAGE_MODEL` | 必填（或每次传 `--model`） | 模型 id，如 `Qwen/Qwen-Image-2.1`；可调用清单见 [AIGC 专区模型库](https://www.modelscope.cn/aigc/models) |
 | `MODELSCOPE_BASE_URL` | `https://api-inference.modelscope.cn` | 网关根地址（不含 `/v1`，误填 `/v1` 会被自动剥掉） |
 | `MODELSCOPE_TIMEOUT_MS` | `300000` | 单次 HTTP 与整体轮询的超时上限 |
 | `MODELSCOPE_POLL_INTERVAL_MS` | `2000` | 异步任务轮询间隔 |
 
-契约依据 [ModelScope API-Inference 官方文档](https://www.modelscope.cn/docs/model-service/API-Inference/intro) 的 AIGC 生图参数表：`model`/`prompt` 必填，`size` 是 **`"WxH"` 字符串**（不是 `width`/`height`；`"928*1664"` 会被网关拒：`size format should be WxH`），`steps` [1,100]、`guidance` [1.5,20]、`seed` [0,2^31-1]、`negative_prompt`、`image_url`（编辑类模型）、`loras`。分辨率档位按系列不同，**Qwen-Image 为 [64x64, 1664x1664]**。
+多 key 池的调度策略：提交的起点 key 随机（多进程并发时天然分摊），401/403/429/5xx/网络错误换下一把重试，全池失败报 `E_PROVIDER_ERROR` 并带逐把 `details.attempts`；400 类参数错误不轮换（换账号无意义）。**异步任务只属于提交它的那个账号，所以轮询与状态查询固定沿用成功的那把 key**；轮询期撞 429 不判失败，用同一把 key 续等（否则一次已付费的生成会被限流作废）。`data.keyIndex` 回显本次消耗的是池里第几把 key（只回下标，任何输出都不含 key 原文）。
 
-`--ref <url>` 透传 `image_url` 走图生图/编辑：Qwen-Image-2.1 官方卡片把它定义为「unified text-to-image generation and image editing」，本地管线用 `pipe(image=...)`，网关侧对应 `image_url`。**只接受公网 http(s) URL**（本地路径不做隐式上传，先跑 `tencent-cos-upload` 换 URL），结果契约不变：`data.refUrl` 回显参考图地址。
+> 为什么需要池：实测网关对 `Qwen/Qwen-Image-2.1` 按 key 计**单并发**——已有任务在跑时同 key 再提交直接 429（`We have to rate limit you for model Qwen/Qwen-Image-2.1`）。单靠一把 key 无法并行出图。
 
-实测（2026-10-14）：`--ref` 生效——上传到 COS 的白底红苹果图，配 prompt「改成蓝色透明玻璃材质，保持构图与光照」后，输出的果柄朝向、苹果位置、背景与光照与参考图一致，只有材质被替换；未传 `--ref` 时同域名走的是纯文生图。注意结果对象的 `sourceUrl` 路径仍写作 `aigc/text-to-image/...`，不要据此判断编辑没生效。
+契约依据 [ModelScope API-Inference 官方文档](https://www.modelscope.cn/docs/model-service/API-Inference/intro) 的 AIGC 生图参数表：`model`/`prompt` 必填，`size` 是 **`"WxH"` 字符串**（不是 `width`/`height`；`"928*1664"` 会被网关拒：`size format should be WxH`），`steps` [1,100]、`guidance` [1.5,20]、`seed` [0,2^31-1]、`negative_prompt`、`image_url`（编辑类模型，字符串或 URL 数组）、`loras`。其中 `steps` 文档写 [1,100]，但**该模型网关实际只收到 [1,50]**（提交期 400：`steps must be in [1,50]`）——上限随模型而变，所以本地按文档的宽区间放行，越界交给网关原文报错。
 
-链路：`POST {base}/v1/images/generations`（带 `X-ModelScope-Async-Mode: true`）→ 拿 `task_id` → 轮询 `GET {base}/v1/tasks/{id}`（带 `X-ModelScope-Task-Type: image_generation`）→ `task_status` 为 `SUCCEED` 时取 `output_images[0]` 下载（下载**不携带 apikey**），`FAILED` 报 `E_PROVIDER_ERROR` 并带 `details.taskId`。也兼容 OpenAI 同步形态 `{ data: [{ b64_json | url }] }`。**实测坑位**：提交响应会提前回 `task_status: "SUCCEED"` 而任务其实还在跑，因此只要响应里没有图片且有 `task_id` 就一律以轮询结果为准。`data.size` 报的是**真实解码像素**（不是请求值），二者不一致时附 `E_SIZE_MISMATCH` 警告。
+**尺寸上限以实测为准**：文档表写 Qwen-Image 档位 `[64x64, 1664x1664]`，但网关实际按**每边 `[64, 2048]`** 校验（超界在提交期直接 400：`width must be integer in [64,2048]`，不消耗出图额度），`2048x2048` 实测真出 2048×2048。注意 [Qwen-Image-2.1 仓库](https://github.com/QwenLM/Qwen-Image-2.1) 推荐的 `2400/2528/2752` 长边是**本地 diffusers 管线**的档位，经网关会被拒。
+
+`--ratio` 把官方 7 个比例映射到网关可用的最大档（比例精确、每边 ≤2048、均为 16 的倍数），与 `--size` 二选一：
+
+| `--ratio` | 实际 `size` | | `--ratio` | 实际 `size` |
+|---|---|---|---|---|
+| `1:1` | `2048x2048` | | `2:3` | `1344x2016` |
+| `4:3` | `2048x1536` | | `16:9` | `2048x1152` |
+| `3:4` | `1536x2048` | | `9:16` | `1152x2048` |
+| `3:2` | `2016x1344` | | | |
+
+实测（2026-10-14）：`--ratio 16:9` 经 CLI 出真 2048×1152、无 `E_SIZE_MISMATCH` 警告。
+
+`--ref <urls...>` 透传 `image_url` 走图生图/多图参考编辑：Qwen-Image-2.1 官方卡片把它定义为「unified text-to-image generation and image editing」，并标明**单次最多 10 张参考图**。**只接受公网 http(s) URL**（本地路径不做隐式上传，先跑 `tencent-cos-upload` 换 URL）。一张时传字符串、多张时传数组（两种形态都实测生效），结果 `data.refUrls` 按传入顺序回显。
+
+实测（2026-10-14）：单图 `--ref` 生效——上传到 COS 的白底红苹果图，配 prompt「改成蓝色透明玻璃材质，保持构图与光照」后，输出的果柄朝向、苹果位置、背景与光照与参考图一致，只有材质被替换。多图 `--ref a b` 同样生效——用两张带**独有特征**的参考图（黄苹果+黑色五角星、紫肉+方形籽西瓜）做判据，出图两处特征同时复现，说明两张图都被消费，而非只取第一张。注意结果对象的 `sourceUrl` 路径仍写作 `aigc/text-to-image/...`，不要据此判断编辑没生效。
+
+链路：`POST {base}/v1/images/generations`（带 `X-ModelScope-Async-Mode: true`）→ 拿 `task_id` → 轮询 `GET {base}/v1/tasks/{id}`（带 `X-ModelScope-Task-Type: image_generation`）→ `task_status` 为 `SUCCEED` 时取 `output_images[0]` 下载（下载**不携带 apikey**），`FAILED` 报 `E_PROVIDER_ERROR` 并带 `details.taskId`。失败原因一律摊进人话：网关的错误载荷可能是 `message` 字符串、`errors:{message,request_id}` 对象或 `errors[]` 数组，插件按 `message/msg/detail/error/errors/logs` 逐层挖出第一句可读文本放进 `error.message`（不再打印成 `[object Object]`），另附 `details.requestId`（找 ModelScope 排查用）与 `details.raw`（截断后的原始 JSON 兜底）。也兼容 OpenAI 同步形态 `{ data: [{ b64_json | url }] }`。**实测坑位**：提交响应会提前回 `task_status: "SUCCEED"` 而任务其实还在跑，因此只要响应里没有图片且有 `task_id` 就一律以轮询结果为准。`data.size` 报的是**真实解码像素**（不是请求值），二者不一致时附 `E_SIZE_MISMATCH` 警告。
 
 ### tencent-cos（腾讯云 COS 文件上传，换公网 URL）
 
