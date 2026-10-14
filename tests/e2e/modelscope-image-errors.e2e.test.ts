@@ -165,9 +165,9 @@ describe("modelscope-image 失败语义（本地 mock）", () => {
       expect(starSize.code).toBe(2);
       expect(parseError(starSize).code).toBe("E_INVALID_OPTION");
 
-      // 文档 guidance 范围 [1.5, 20]
+      // guidance 范围 [1, 20]：下限从 1.5 放宽到 1，因为 Turbo 官方默认 CFG=1（media-22 / D25）
       const badGuidance = await cli(
-        ["--json", "modelscope-image-gen", "--prompt", "x", "--guidance", "1"],
+        ["--json", "modelscope-image-gen", "--prompt", "x", "--guidance", "0.9"],
         msEnv(mock.endpoint),
       );
       expect(badGuidance.code).toBe(2);
