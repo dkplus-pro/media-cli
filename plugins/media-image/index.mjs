@@ -1,138 +1,6 @@
-import { mkdirSync } from "node:fs";
-import path from "node:path";
-import { compressOne } from "./lib/compress.mjs";
-import { cliError } from "./lib/errors.mjs";
-import { defaultSidecar, enumerateInputs, resolveInput } from "./lib/files.mjs";
-import { SUPPORTED_EXTENSIONS } from "./lib/format.mjs";
-import {
-  parseAngle,
-  parseColor,
-  parseDpi,
-  parseFontSize,
-  parseImageFormat,
-  parseMargin,
-  parseOpacity,
-  parseOrder,
-  parseOrientation,
-  parsePageSize,
-  parseQuality,
-  parseSpacing,
-  parseText,
-} from "./lib/options.mjs";
-import { mergeToPdf } from "./lib/pdf-merge.mjs";
-import { loadSharp } from "./lib/sharp.mjs";
-import { createWatermarker } from "./lib/watermark.mjs";
+import { compress, faceCover, gridCaption, toPdf, watermark } from "./lib/commands.mjs";
 
-// compress/watermark 共享的批量骨架：单文件直接处理，文件夹逐张处理（单张失败不中断，记入 failed）
-async function runBatch(ctx, args, { defaultDirName, sidecarTag, processOne }) {
-  const isDirectory = resolveInput(args.input);
-  const outputDir = isDirectory ? path.resolve(ctx.cwd, args.output ?? defaultDirName) : null;
-  const inputAbs = path.resolve(ctx.cwd, args.input);
-  // 默认输出目录落在输入目录内时，枚举阶段排除，防止二次运行吃到上次产物
-  const excludeUnder =
-    outputDir !== null && (outputDir === inputAbs || outputDir.startsWith(`${inputAbs}${path.sep}`))
-      ? outputDir
-      : null;
-
-  const inputs = enumerateInputs(args.input, {
-    recursive: Boolean(args.recursive),
-    excludeUnder,
-  });
-  if (inputs.length === 0) {
-    throw cliError(
-      "E_INVALID_OPTION",
-      `输入目录中没有可处理的图片（${SUPPORTED_EXTENSIONS.join("/")}）：${args.input}`,
-      { option: "--input", value: args.input },
-    );
-  }
-
-  if (!isDirectory) {
-    const output = args.output
-      ? path.resolve(ctx.cwd, args.output)
-      : defaultSidecar(args.input, sidecarTag);
-    return { path: output, ...(await processOne(args.input, output)) };
-  }
-
-  const results = [];
-  const failed = [];
-  for (const { path: file, relative } of inputs) {
-    const target = path.join(outputDir, relative);
-    try {
-      mkdirSync(path.dirname(target), { recursive: true });
-      results.push({ path: target, ...(await processOne(file, target)) });
-      ctx.logger.info(`已处理 ${relative} → ${target}`);
-    } catch (err) {
-      failed.push({ file, reason: err?.message ?? String(err) });
-    }
-  }
-  if (results.length === 0) {
-    throw cliError("E_PROVIDER_ERROR", "全部图片处理失败", { failed });
-  }
-  return { outputDir, results, failed, total: inputs.length };
-}
-
-async function compress(ctx, args) {
-  const quality = parseQuality(args.quality, 80);
-  const sharp = await loadSharp();
-  const data = await runBatch(ctx, args, {
-    defaultDirName: "min",
-    sidecarTag: "min",
-    processOne: (file, output) => compressOne(sharp, file, output, { quality }),
-  });
-  if ("results" in data) {
-    let bytesBefore = 0;
-    let bytesAfter = 0;
-    for (const r of data.results) {
-      bytesBefore += r.bytesBefore;
-      bytesAfter += r.bytesAfter;
-    }
-    return { ...data, quality, bytesBefore, bytesAfter, savedBytes: bytesBefore - bytesAfter };
-  }
-  return { ...data, quality };
-}
-
-async function watermark(ctx, args) {
-  const opts = {
-    text: parseText(args.text),
-    font:
-      typeof args.font === "string" && args.font.trim() !== "" ? args.font.trim() : "sans-serif",
-    angle: parseAngle(args.angle, 30),
-    spacing: parseSpacing(args.spacing, 80),
-    opacity: parseOpacity(args.opacity, 0.3),
-    fontSize: parseFontSize(args.fontSize),
-    color: parseColor(args.color, "#ffffff"),
-  };
-  const sharp = await loadSharp();
-  const apply = createWatermarker(sharp, opts);
-  const data = await runBatch(ctx, args, {
-    defaultDirName: "watermark",
-    sidecarTag: "watermark",
-    processOne: (file, output) => apply(file, output),
-  });
-  // opts.fontSize 为 null 表示自动；单文件以实际处理结果为准（fontSize 已按图片解析）
-  const echo = { ...opts, fontSize: opts.fontSize ?? null };
-  if ("results" in data) {
-    return { ...data, ...echo };
-  }
-  return { ...echo, ...data };
-}
-
-async function toPdf(ctx, args) {
-  return mergeToPdf(ctx, {
-    input: args.input,
-    output: args.output,
-    recursive: Boolean(args.recursive),
-    skipBroken: Boolean(args.skipBroken),
-    order: parseOrder(args.order),
-    page: parsePageSize(args.page),
-    orientation: parseOrientation(args.orientation),
-    imageFormat: parseImageFormat(args.imageFormat),
-    dpi: parseDpi(args.dpi),
-    margin: parseMargin(args.margin),
-    quality: parseQuality(args.quality, 85),
-  });
-}
-
+// 纯 manifest：handler 全在 lib/commands.mjs（AGENTS.md §6 的 300 行红线；suno-music/agnes 同款房子风格）
 export default {
   name: "media-image",
   version: "0.1.0",
@@ -179,6 +47,33 @@ export default {
       handler: watermark,
     },
     {
+      name: "media-face-cover",
+      description:
+        "人脸遮罩：Apple Vision 本地检脸（离线，需 macOS + swiftc）后在每张脸上叠实心白圆，漏检可用 --at 人工补",
+      options: [
+        { flags: "--input <path>", description: "图片文件或文件夹（jpg/jpeg/png/webp）" },
+        {
+          flags: "--output <path>",
+          description: "输出文件/目录（单文件默认 <name>.covered.<ext>，文件夹默认 ./face-cover）",
+        },
+        {
+          flags: "--scale <0.5-3>",
+          description: "人脸框内切圆的放大倍数（默认 1.2，多盖住发际线与下巴）",
+        },
+        {
+          flags: "--at <x,y,r...>",
+          description: "人工遮脸圆（像素、左上原点），可重复传多个，与检测结果合并；侧脸/漏检兜底",
+        },
+        {
+          flags: "--min-confidence <0-1>",
+          description: "低于此置信度的脸不遮（默认 0.3）",
+        },
+        { flags: "--color <color>", description: "圆填充色（默认 #FFFFFF）" },
+        { flags: "--recursive", description: "文件夹输入时递归子目录（默认仅一级）" },
+      ],
+      handler: faceCover,
+    },
+    {
       name: "media-to-pdf",
       description: "多张图片合并为一个 PDF（单文件出一页，文件夹内全部图片按文件名自然序合成多页）",
       options: [
@@ -223,6 +118,77 @@ export default {
         { flags: "--recursive", description: "文件夹输入时递归子目录（默认仅一级）" },
       ],
       handler: toPdf,
+    },
+    {
+      name: "media-grid-caption",
+      description:
+        "宫格加字幕：给九宫格/分镜页的每一格底部叠半透明黑条+白字（自动字号自动换行，不改整图尺寸）；定位失败时外扩到底部",
+      options: [
+        {
+          flags: "--input <path>",
+          description: "单张宫格图（jpg/jpeg/png/webp；本命令不支持目录批量）",
+        },
+        {
+          flags: "--cells <path>",
+          description:
+            "cells JSON（doubao-grid-locate --output 的产物，或手写）：含每格 x/y/w/h 与可选 text，坐标为像素、左上原点",
+        },
+        {
+          flags: "--captions <path>",
+          description:
+            '字幕 JSON 数组 [{"index":0,"text":"...","fontSize":42,"align":"center"}]，按 index 与格子合并',
+        },
+        { flags: "--cols <n>", description: "人工等分列数（须与 --rows 同时给，给了就跳过检测）" },
+        { flags: "--rows <n>", description: "人工等分行数（须与 --cols 同时给）" },
+        {
+          flags: "--locate",
+          description: "允许本地自动检测宫格（默认开启；只认分隔线对齐的规则宫格）",
+        },
+        {
+          flags: "--no-locate",
+          description: "关闭本地自动检测（检测不到的倾斜/错位分镜页建议关掉，直接用 --cells）",
+        },
+        {
+          flags: "--font <family>",
+          description: "字体族名（默认 sans-serif，实测可渲染中文；不是字体文件路径）",
+        },
+        { flags: "--font-size <px>", description: "字号 6-1000（默认每格按格宽自适应）" },
+        { flags: "--text-color <color>", description: "字幕颜色（默认 #FFFFFF）" },
+        {
+          flags: "--opacity <0-1>",
+          description: "黑条不透明度（默认 0.75 半透明；传 1 即纯黑）",
+        },
+        { flags: "--padding <px>", description: "黑条内边距像素（默认 12）" },
+        {
+          flags: "--position <bottom|top>",
+          description: "黑条在格内的位置：bottom（默认）| top",
+        },
+        {
+          flags: "--flat-tol <0-255>",
+          description: "本地检测：像素与背景色的灰度容差（默认 24；越大越容易把内容误判成分隔带）",
+        },
+        {
+          flags: "--min-gutter <n>",
+          description: "本地检测：分隔带最小厚度像素（默认 3）",
+        },
+        {
+          flags: "--max-overlap <fraction>",
+          description:
+            "格子重叠的分级阈值：重叠面积占**较小格面积**的比重 ≤ 此值只发 E_CELLS_OVERLAP 警告并照常渲染，" +
+            "超过才报 E_INVALID_OPTION（默认 0.02）。视觉模型放大回原图的 ±1px 取整约 0.2%，实测误检是 22%–33%，" +
+            "所以 0.02 落在两端都有余量；范围 0-1，0 = 一点重叠都按硬错拒收",
+        },
+        {
+          flags: "--allow-overlap",
+          description:
+            "完全放行 --cells 里的格子重叠（连 E_CELLS_OVERLAP 警告也不发）。默认按 --max-overlap 分级：小重叠警告、大重叠拒绝——重叠会让同一格画上两条字幕，刻意的分层版式才需要全放行",
+        },
+        {
+          flags: "--output <path>",
+          description: "输出图片路径（默认 <name>.captioned.<ext>；传目录则落在目录里）",
+        },
+      ],
+      handler: gridCaption,
     },
   ],
 };
