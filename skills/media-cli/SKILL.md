@@ -34,7 +34,7 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 | 文生图 | `image-gen --prompt <文案>` | `--size 1024x1024` `--output` `--quality` |
 | 参考图+文案改图/生图 | `image-gen --prompt ... --ref <图1> <图2>` | 多张参考图走 edits 端点；仅 jpg/jpeg/png/webp |
 | ModelScope/Qwen-Image 文生图与图生图 | `modelscope-image-gen --prompt <文案>` | `--model`（默认 `MODELSCOPE_IMAGE_MODEL`）`--size 1328x1328`（`WxH` 字符串）`--steps` `--guidance` `--seed` `--negative-prompt` `--ref <公网图片URL>`（图生图/编辑）`--output` |
-| 本地文件上传换公网 URL | `tencent-cos-upload --file <文件>` | `--env prod\|test`（默认取 `COS_ENV`，无内置默认）`--key <对象名>`（自动带 `COS_<ENV>_PREFIX`）`--content-type <mime>` → `data.url` |
+| 本地文件上传换公网 URL | `tencent-cos-upload --file <文件>` | `--env prod\|test`（默认 `prod`，`COS_ENV` 可改默认值）`--key <对象名>`（自动带 `COS_<ENV>_PREFIX`）`--content-type <mime>` → `data.url` |
 | 文生音乐/配乐/BGM | `suno-gen` | `--prompt <灵感>` **或** `--lyrics <歌词>`（二选一，互斥）；`--tags` `--title` `--instrumental` `--model` |
 | 文生音效 | `suno-sound --text <描述>` | `--tags` `--loop` `--model chirp-crow\|chirp-fenix` |
 | 查任务/补下载/查余额 | `suno-task --id` / `suno-download --id --output` / `suno-balance` | 恢复超时任务用 |
@@ -51,7 +51,7 @@ description: 媒体处理 CLI（@dkplus/media-cli，命令名 media-cli）：抠
 | `media-cutout` | **仅 macOS 14+**；首次运行自动 `swiftc` 编译缓存（需 Xcode CLT）；`CUTOUT_BIN` 可覆盖 | 其他平台明确报错，勿在 Linux CI 使用 |
 | `image-gen` | `AZURE_IMAGE_KEY_POOL` + `AZURE_IMAGE_ENDPOINT_POOL`（英文逗号分隔，**按索引一一配对**） | `AZURE_IMAGE_DEPLOYMENT=gpt-image-2` `AZURE_IMAGE_OUTPUT_FORMAT=png` `AZURE_IMAGE_QUALITY=auto` 有默认 |
 | `modelscope-image-gen` | `MODELSCOPE_API_KEY` + `MODELSCOPE_IMAGE_MODEL`（或每次传 `--model`） | `MODELSCOPE_BASE_URL` 默认 `https://api-inference.modelscope.cn`（国际站 `api-inference.modelscope.ai`；末尾 `/v1` 会被自动剥掉）；`MODELSCOPE_TIMEOUT_MS=300000` `MODELSCOPE_POLL_INTERVAL_MS=2000` |
-| `tencent-cos-upload` | `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY` + `COS_REGION` + `COS_ENV`（或每次 `--env`）+ `COS_<ENV>_BUCKET` + `CDN_PURGE_URL_<ENV>` | 两池 prod/test 各自 bucket/prefix/域名；`CDN_PURGE_URL_*` 只取其 origin 作公网域名（不发 purge 请求）；`COS_<ENV>_PREFIX` 可空=根目录；`TENCENT_COS_TIMEOUT_MS=120000`、`TENCENT_COS_DOMAIN` 仅自测指向 |
+| `tencent-cos-upload` | `TENCENT_SECRET_ID` + `TENCENT_SECRET_KEY` + `COS_REGION` + `COS_<ENV>_BUCKET` + `CDN_PURGE_URL_<ENV>` + `COS_ENV`（可选，默认 `prod`，或每次 `--env`） | 两池 prod/test 各自 bucket/prefix/域名；`CDN_PURGE_URL_*` 只取其 origin 作公网域名（不发 purge 请求）；`COS_<ENV>_PREFIX` 可空=根目录；`TENCENT_COS_TIMEOUT_MS=120000`、`TENCENT_COS_DOMAIN` 仅自测指向 |
 | `suno-*` | `SUNO_API_KEY`（open.suno.cn） | `SUNO_BASE_URL`/`SUNO_TIMEOUT_MS` 可选 |
 
 ## 坑位与输出语义

@@ -155,7 +155,7 @@ node dist/media-cli.js --json modelscope-image-gen --prompt "把背景换成海�
 export TENCENT_SECRET_ID="AKIDxxxxxxxx"        # 腾讯云 API 密钥（SecretId）
 export TENCENT_SECRET_KEY="xxxxxxxx"           # 腾讯云 API 密钥（SecretKey）
 export COS_REGION="ap-guangzhou"
-export COS_ENV="prod"                          # 默认池，--env 可覆盖（无内置默认值）
+export COS_ENV="prod"                          # 可选：默认池，不设即 prod；--env 单次覆盖
 export COS_PROD_BUCKET="prod-<APPID>"          # 必须含 -APPID 后缀
 export COS_PROD_PREFIX="tmp/"
 export CDN_PURGE_URL_PROD="https://cdn.ai4love.cn/tmp/dist/index.html"
@@ -171,7 +171,7 @@ node dist/media-cli.js --json tencent-cos-upload --file 设计稿.pdf --env test
 |---|---|---|
 | `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY` | 必填 | 腾讯云 API 密钥对；缺失报 `E_CONFIG` 且不发请求 |
 | `COS_REGION` | 必填 | 桶所在地域，如 `ap-guangzhou` |
-| `COS_ENV` | 必填（或每次传 `--env`） | 默认池 `prod` \| `test`；工具不替用户选默认池 |
+| `COS_ENV` | `prod` | 默认池 `prod` \| `test`；不设或为空即 `prod`，`--env` 单次覆盖 |
 | `COS_<ENV>_BUCKET` | 必填 | 桶名，必须带 `-APPID` 后缀 |
 | `COS_<ENV>_PREFIX` | 空（根目录） | 对象 key 前缀；不允许以 `/` 开头，末尾斜杠自动归一 |
 | `CDN_PURGE_URL_<ENV>` | 必填 | 该环境的文件生命周期接口地址，本工具**只取它的 origin 作公网访问域名**，不发任何 purge 请求 |

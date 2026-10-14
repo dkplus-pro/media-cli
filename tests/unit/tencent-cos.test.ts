@@ -57,9 +57,18 @@ describe("tencent-cos 池配置", () => {
     expect(loadPool(undefined, { ...BASE, COS_PROD_PREFIX: "tmp//a//" }).prefix).toBe("tmp/a/");
   });
 
-  it("未指定池（无 COS_ENV 且无 --env）→ E_CONFIG，且不写默认池", () => {
+  it("未指定池（无 COS_ENV 且无 --env）→ 落内置默认 prod 池", () => {
     const { COS_ENV: _omit, ...rest } = BASE;
-    const err = catchConfig(rest);
+    expect(loadPool(undefined, rest)).toMatchObject({
+      name: "prod",
+      bucket: "ai4love-1300000000",
+      publicBase: "https://cdn.ai4love.cn",
+    });
+    expect(loadPool(undefined, { ...rest, COS_ENV: "" }).name).toBe("prod");
+  });
+
+  it("COS_ENV 非法值 → E_CONFIG（不吃默认值）", () => {
+    const err = catchConfig({ ...BASE, COS_ENV: "staging" });
     expect(err.code).toBe("E_CONFIG");
     expect(err.details?.var).toBe("COS_ENV");
   });

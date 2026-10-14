@@ -2,6 +2,9 @@ import { cliError } from "./errors.mjs";
 
 export const POOL_NAMES = ["prod", "test"];
 
+// 未显式指定时的内置默认池（prod）；--env 与 COS_ENV 均可覆盖
+export const DEFAULT_POOL = "prod";
+
 function requireVar(env, name) {
   const value = env[name];
   if (typeof value !== "string" || value.trim() === "") {
@@ -43,14 +46,15 @@ function positiveInt(value, name, fallback) {
   return num;
 }
 
-// 池选择：--env 优先，其次 COS_ENV；无默认值（写哪个桶是业务决定，不由工具替用户选）
+// 池选择：--env 优先，其次 COS_ENV；都未设置（或为空）时落默认池 prod
 export function loadPool(explicitEnv, env = process.env) {
-  const name = explicitEnv ?? env.COS_ENV;
-  if (typeof name !== "string" || !POOL_NAMES.includes(name)) {
+  const declared = explicitEnv ?? env.COS_ENV?.trim() ?? "";
+  const name = declared === "" ? DEFAULT_POOL : declared;
+  if (!POOL_NAMES.includes(name)) {
     throw cliError(
       "E_CONFIG",
-      `未指定存储环境池：设置 COS_ENV=${POOL_NAMES.join("|")} 或传 --env`,
-      { var: "COS_ENV", value: name },
+      `无效的存储环境池：${declared}（可用 ${POOL_NAMES.join(" | ")}，默认 ${DEFAULT_POOL}）`,
+      { var: "COS_ENV", value: declared },
     );
   }
   const tag = name.toUpperCase();

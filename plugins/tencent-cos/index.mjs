@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import path from "node:path";
-import { loadPool, POOL_NAMES } from "./lib/env.mjs";
+import { DEFAULT_POOL, loadPool, POOL_NAMES } from "./lib/env.mjs";
 import { cliError } from "./lib/errors.mjs";
 import { uploadObject } from "./lib/upload.mjs";
 
@@ -113,12 +113,13 @@ export default {
   commands: [
     {
       name: "tencent-cos-upload",
-      description: "腾讯云 COS 上传单个文件并返回公网 URL（prod/test 两池，COS_ENV 或 --env 选择）",
+      description:
+        "腾讯云 COS 上传单个文件并返回公网 URL（prod/test 两池，默认 prod，--env 或 COS_ENV 切换）",
       options: [
         { flags: "--file <path>", description: "待上传的本地文件（必填，单个文件）" },
         {
           flags: "--env <pool>",
-          description: `存储环境池：${POOL_NAMES.join(" | ")}（默认取 COS_ENV，无内置默认）`,
+          description: `存储环境池：${POOL_NAMES.join(" | ")}（默认 ${DEFAULT_POOL}；COS_ENV 可改默认值，--env 单次覆盖）`,
         },
         {
           flags: "--key <objectKey>",

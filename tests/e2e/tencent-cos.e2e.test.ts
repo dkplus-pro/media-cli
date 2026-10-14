@@ -59,7 +59,10 @@ function startMock(status: number, message: string): Promise<Mock> {
   });
 }
 
-function cosEnv(host: string, extra: Record<string, string> = {}): Record<string, string> {
+function cosEnv(
+  host: string,
+  extra: Record<string, string | undefined> = {},
+): Record<string, string | undefined> {
   return {
     TENCENT_SECRET_ID: "sid-test-value",
     TENCENT_SECRET_KEY: "skey-test-value",
@@ -225,17 +228,36 @@ describe("tencent-cos-upload e2e（本地 COS mock）", () => {
         expect(parseError(badKey).code).toBe("E_INVALID_OPTION");
       }
 
-      const { COS_ENV: _omit, ...noPool } = cosEnv(mock.host);
-      const poolMissing = await cli(["--json", "tencent-cos-upload", "--file", file], noPool);
-      expect(poolMissing.code).toBe(3);
-      expect(parseError(poolMissing).code).toBe("E_CONFIG");
+      const badPool = cosEnv(mock.host, { COS_ENV: "staging" });
+      const poolInvalid = await cli(["--json", "tencent-cos-upload", "--file", file], badPool);
+      expect(poolInvalid.code).toBe(3);
+      expect(parseError(poolInvalid).code).toBe("E_CONFIG");
 
-      const { TENCENT_SECRET_ID: _sid, ...noId } = cosEnv(mock.host);
+      // 显式置 undefined = 从继承环境中删除（避免本机真实凭据泄漏进错误分支）
+      const noId = cosEnv(mock.host, { TENCENT_SECRET_ID: undefined });
       expect(
         parseError(await cli(["--json", "tencent-cos-upload", "--file", file], noId)).code,
       ).toBe("E_CONFIG");
 
       expect(mock.requests).toHaveLength(0);
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("未设 COS_ENV 且未传 --env → 默认落 prod 池", async () => {
+    const mock = await startMock(200, "unused");
+    try {
+      const noPool = cosEnv(mock.host, { COS_ENV: undefined });
+      const r = await cli(["--json", "tencent-cos-upload", "--file", file], noPool);
+      expect(r.code).toBe(0);
+      expect(mock.requests).toHaveLength(1);
+      expect(parseData(r)).toMatchObject({
+        env: "prod",
+        bucket: "ai4love-1300000000",
+        region: "ap-guangzhou",
+      });
+      expect(String(parseData(r).key)).toMatch(/^tmp\//);
     } finally {
       await mock.close();
     }
