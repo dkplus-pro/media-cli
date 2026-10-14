@@ -1,4 +1,5 @@
 import { analyzeMusicWithDoubao } from "./lib/analysis.mjs";
+import { locateGridWithDoubao } from "./lib/grid-locate.mjs";
 import { transcribeWithDoubao } from "./lib/transcribe.mjs";
 
 export default {
@@ -52,6 +53,43 @@ export default {
         { flags: "--recursive", description: "文件夹递归枚举" },
       ],
       handler: analyzeMusicWithDoubao,
+    },
+    {
+      name: "doubao-grid-locate",
+      description:
+        "视觉模型定位宫格分镜：给整张分镜/漫画页的每一格输出像素矩形（cells JSON 可直接喂 media-grid-caption --cells，需 DOUBAO_API_KEY）",
+      options: [
+        { flags: "--input <path>", description: "单张宫格图（png/jpg/jpeg/webp；目录会被拒）" },
+        {
+          flags: "--model <id>",
+          description:
+            "豆包视觉模型 id（取自 --model 或环境变量 DOUBAO_VISION_MODEL，无内置默认值）",
+        },
+        {
+          flags: "--expected <n>",
+          description:
+            "提示模型本页应有的格数（如 4/6/9），写进 prompt 提高检出一致性；与实际检出数不符会附 E_CELL_COUNT_MISMATCH 警告（不失败）",
+        },
+        {
+          flags: "--max-side <n>",
+          description:
+            "送模型前把图片最长边缩到 n 像素以内（默认 1568，范围 256-4096；降采样后会统一重编码为 JPEG q82，实测 data URI 从 8.74MB 降到 0.40MB）。" +
+            "注意：**瘦身只降传输失败面，不降耗时**（实测 --max-side 512 与默认一样慢）。输出的 cells/image 坐标一律是**原图像素**，data.scale/data.sent 记录实际缩放",
+        },
+        {
+          flags: "--timeout <ms>",
+          description:
+            "单次请求超时毫秒（范围 1000-1800000；本命令默认 300000，比转写的 120000 高一个量级）。" +
+            "实测单页 2048x2048 分镜 181.8s / 329.6s —— 慢是 provider 侧的，329.6s 已过 300s 线，慢页建议 --timeout 360000。" +
+            "优先级：--timeout > DOUBAO_TIMEOUT_MS > 本命令默认 300000",
+        },
+        {
+          flags: "--output <path>",
+          description:
+            "把 cells JSON 落盘（缺省只回显在 stdout 的 data 里）；产物可人工改完再喂 media-grid-caption --cells",
+        },
+      ],
+      handler: locateGridWithDoubao,
     },
   ],
 };

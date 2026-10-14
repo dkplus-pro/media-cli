@@ -123,6 +123,7 @@ describe("doubao 选项与配置", () => {
       baseUrl: "http://127.0.0.1:9999/api/v3",
       model: "custom-model",
       timeoutMs: 1234,
+      visionModel: null,
     });
     expect(getConfig({ DOUBAO_API_KEY: "k" }).baseUrl).toBe(
       "https://ark.cn-beijing.volces.com/api/v3",
