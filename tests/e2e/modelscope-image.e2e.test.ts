@@ -213,7 +213,7 @@ describe("modelscope-image e2e（本地 mock）", () => {
     }
   });
 
-  it("文档化参数全量透传：size/steps/guidance/seed/negative_prompt", async () => {
+  it("文档化参数全量透传：size/steps/guidance/seed/negative_prompt/ref→image_url", async () => {
     const mock = await startMock(() => ({
       status: 200,
       body: { data: [{ b64_json: PNG_BYTES.toString("base64") }] },
@@ -238,6 +238,8 @@ describe("modelscope-image e2e（本地 mock）", () => {
           "12345",
           "--negative-prompt",
           "blurry",
+          "--ref",
+          "https://cdn.ai4love.cn/tmp/a.png",
           "--output",
           out,
         ],
@@ -252,7 +254,9 @@ describe("modelscope-image e2e（本地 mock）", () => {
         guidance: 3.5,
         seed: 12345,
         negative_prompt: "blurry",
+        image_url: "https://cdn.ai4love.cn/tmp/a.png",
       });
+      expect(JSON.parse(r.stdout).data.refUrl).toBe("https://cdn.ai4love.cn/tmp/a.png");
     } finally {
       await mock.close();
     }
@@ -386,6 +390,16 @@ describe("modelscope-image e2e（本地 mock）", () => {
       );
       expect(badGuidance.code).toBe(2);
       expect(parseError(badGuidance).code).toBe("E_INVALID_OPTION");
+
+      // --ref 只收公网 http(s) URL：本地路径不做隐式上传
+      for (const badRef of ["/tmp/a.png", "./a.png", "ftp://cdn/a.png"]) {
+        const badRefRun = await cli(
+          ["--json", "modelscope-image-gen", "--prompt", "x", "--ref", badRef],
+          msEnv(mock.endpoint),
+        );
+        expect(badRefRun.code).toBe(2);
+        expect(parseError(badRefRun).code).toBe("E_INVALID_OPTION");
+      }
       expect(mock.requests).toHaveLength(0);
     } finally {
       await mock.close();

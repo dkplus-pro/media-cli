@@ -46,13 +46,15 @@ function requireKey(config) {
 }
 
 // 参数名以 ModelScope API-Inference 官方文档的 AIGC 生图表为准：
-// size 是 "WxH" 字符串（非 width/height），steps/guidance/seed/negative_prompt
-function buildSubmitBody({ model, prompt, size, negativePrompt, steps, guidance, seed }) {
+// size 是 "WxH" 字符串（非 width/height），steps/guidance/seed/negative_prompt；
+// 编辑类模型（Qwen-Image-2.1 同时是文生图与图像编辑模型）用 image_url 传参考图
+function buildSubmitBody({ model, prompt, size, negativePrompt, steps, guidance, seed, imageUrl }) {
   const body = { model, prompt, size };
   if (negativePrompt !== undefined) body.negative_prompt = negativePrompt;
   if (steps !== undefined) body.steps = steps;
   if (guidance !== undefined) body.guidance = guidance;
   if (seed !== undefined) body.seed = seed;
+  if (imageUrl !== undefined) body.image_url = imageUrl;
   return body;
 }
 

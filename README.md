@@ -129,6 +129,7 @@ export MODELSCOPE_IMAGE_MODEL="Qwen/Qwen-Image-2.1"                # 默认模�
 node dist/media-cli.js --json modelscope-image-gen --prompt "一只红苹果" --output apple.png
 node dist/media-cli.js --json modelscope-image-gen --prompt "江南水乡" --size 1328x1328 --steps 40 --guidance 3.5 --seed 12345
 node dist/media-cli.js --json modelscope-image-gen --prompt "赛博城市" --negative-prompt "模糊, 低画质"
+node dist/media-cli.js --json modelscope-image-gen --prompt "把背景换成海边日落" --ref "$(node dist/media-cli.js --json tencent-cos-upload --file a.png | sed -n 's/.*"url":"\([^"]*\)".*/\1/p')"
 ```
 
 | 环境变量 | 默认 | 说明 |
@@ -141,7 +142,43 @@ node dist/media-cli.js --json modelscope-image-gen --prompt "赛博城市" --neg
 
 契约依据 [ModelScope API-Inference 官方文档](https://www.modelscope.cn/docs/model-service/API-Inference/intro) 的 AIGC 生图参数表：`model`/`prompt` 必填，`size` 是 **`"WxH"` 字符串**（不是 `width`/`height`；`"928*1664"` 会被网关拒：`size format should be WxH`），`steps` [1,100]、`guidance` [1.5,20]、`seed` [0,2^31-1]、`negative_prompt`、`image_url`（编辑类模型）、`loras`。分辨率档位按系列不同，**Qwen-Image 为 [64x64, 1664x1664]**。
 
+`--ref <url>` 透传 `image_url` 走图生图/编辑：Qwen-Image-2.1 官方卡片把它定义为「unified text-to-image generation and image editing」，本地管线用 `pipe(image=...)`，网关侧对应 `image_url`。**只接受公网 http(s) URL**（本地路径不做隐式上传，先跑 `tencent-cos-upload` 换 URL），结果契约不变：`data.refUrl` 回显参考图地址。
+
+实测（2026-10-14）：`--ref` 生效——上传到 COS 的白底红苹果图，配 prompt「改成蓝色透明玻璃材质，保持构图与光照」后，输出的果柄朝向、苹果位置、背景与光照与参考图一致，只有材质被替换；未传 `--ref` 时同域名走的是纯文生图。注意结果对象的 `sourceUrl` 路径仍写作 `aigc/text-to-image/...`，不要据此判断编辑没生效。
+
 链路：`POST {base}/v1/images/generations`（带 `X-ModelScope-Async-Mode: true`）→ 拿 `task_id` → 轮询 `GET {base}/v1/tasks/{id}`（带 `X-ModelScope-Task-Type: image_generation`）→ `task_status` 为 `SUCCEED` 时取 `output_images[0]` 下载（下载**不携带 apikey**），`FAILED` 报 `E_PROVIDER_ERROR` 并带 `details.taskId`。也兼容 OpenAI 同步形态 `{ data: [{ b64_json | url }] }`。**实测坑位**：提交响应会提前回 `task_status: "SUCCEED"` 而任务其实还在跑，因此只要响应里没有图片且有 `task_id` 就一律以轮询结果为准。`data.size` 报的是**真实解码像素**（不是请求值），二者不一致时附 `E_SIZE_MISMATCH` 警告。
+
+### tencent-cos（腾讯云 COS 文件上传，换公网 URL）
+
+```bash
+# ~/.zshrc —— 两个池：prod 与 test，各有一套桶/前缀/域名
+export TENCENT_SECRET_ID="AKIDxxxxxxxx"        # 腾讯云 API 密钥（SecretId）
+export TENCENT_SECRET_KEY="xxxxxxxx"           # 腾讯云 API 密钥（SecretKey）
+export COS_REGION="ap-guangzhou"
+export COS_ENV="prod"                          # 默认池，--env 可覆盖（无内置默认值）
+export COS_PROD_BUCKET="prod-<APPID>"          # 必须含 -APPID 后缀
+export COS_PROD_PREFIX="tmp/"
+export CDN_PURGE_URL_PROD="https://cdn.ai4love.cn/tmp/dist/index.html"
+export COS_TEST_BUCKET="dev-<APPID>"
+export COS_TEST_PREFIX="tmp/"
+export CDN_PURGE_URL_TEST="https://devcdn.ai4love.cn/tmp/dist/index.html"
+
+node dist/media-cli.js --json tencent-cos-upload --file a.png
+node dist/media-cli.js --json tencent-cos-upload --file 设计稿.pdf --env test --key docs/design.pdf
+```
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY` | 必填 | 腾讯云 API 密钥对；缺失报 `E_CONFIG` 且不发请求 |
+| `COS_REGION` | 必填 | 桶所在地域，如 `ap-guangzhou` |
+| `COS_ENV` | 必填（或每次传 `--env`） | 默认池 `prod` \| `test`；工具不替用户选默认池 |
+| `COS_<ENV>_BUCKET` | 必填 | 桶名，必须带 `-APPID` 后缀 |
+| `COS_<ENV>_PREFIX` | 空（根目录） | 对象 key 前缀；不允许以 `/` 开头，末尾斜杠自动归一 |
+| `CDN_PURGE_URL_<ENV>` | 必填 | 该环境的文件生命周期接口地址，本工具**只取它的 origin 作公网访问域名**，不发任何 purge 请求 |
+| `TENCENT_COS_DOMAIN` | 未设 | 自测/代理场景把 SDK 请求指向指定 host（如本地 mock） |
+| `TENCENT_COS_TIMEOUT_MS` | `120000` | 单次上传超时上限 |
+
+上传单个文件（`--file`，目录/不存在分别报 `E_INVALID_OPTION` / `E_MISSING_ARGUMENT`），对象默认永久保留（不写过期元数据、不驻留计时）。默认对象名 = `<前缀><文件名 ASCII slug>-<ISO 时间戳>[.<扩展名>]`——非 ASCII 字符折叠为 `-`，因为对象 key 会直接进公网 URL 而不做二次编码；`--key` 可指定（同样限定 `[A-Za-z0-9._-]` 与 `/`，拒绝绝对路径与 `..`，并自动带上前缀）。`data.url` = 池域名 origin + `/` + key，另回显 `key`/`bucket`/`region`/`env`/`bytes`/`contentType`/`etag`。COS 侧失败报 `E_PROVIDER_ERROR` 且 `details.source=tencent-cos`（带 `status`/`code`/`bucket`/`key`）；超时同样 `E_PROVIDER_ERROR` 并附 `hint`——请求可能已到达 COS，重传前先确认该 key。
 
 ### media-cutout（本地抠图，macOS 14+）
 

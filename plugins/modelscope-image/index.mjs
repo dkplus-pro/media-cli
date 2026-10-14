@@ -37,6 +37,26 @@ function extensionFor(ref, fallback) {
   return fallback;
 }
 
+// 参考图只接受已经是公网 URL 的地址：本地文件先用 tencent-cos-upload 换 URL
+function parseRefUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    throw cliError("E_INVALID_OPTION", `--ref 必须是 http(s) 图片 URL：${value}`, {
+      option: "--ref",
+      value,
+    });
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw cliError("E_INVALID_OPTION", `--ref 协议必须是 http/https：${value}`, {
+      option: "--ref",
+      value,
+    });
+  }
+  return value;
+}
+
 async function modelscopeImageGen(ctx, args) {
   if (typeof args.prompt !== "string" || args.prompt.trim() === "") {
     throw cliError("E_MISSING_ARGUMENT", "缺少必填 --prompt", { option: "--prompt" });
@@ -58,6 +78,7 @@ async function modelscopeImageGen(ctx, args) {
           max: 2147483647,
           integer: true,
         });
+  const imageUrl = args.ref === undefined ? undefined : parseRefUrl(args.ref);
 
   // 配置校验必须先于任何网络请求
   const config = loadConfig();
@@ -76,6 +97,7 @@ async function modelscopeImageGen(ctx, args) {
     steps,
     guidance,
     seed,
+    imageUrl,
   });
 
   const buf = await fetchImageBytes(config, result);
@@ -116,6 +138,7 @@ async function modelscopeImageGen(ctx, args) {
     bytes: buf.length,
     model,
     size: actual ?? requested,
+    ...(imageUrl === undefined ? {} : { refUrl: imageUrl }),
     ...(result.url !== undefined ? { sourceUrl: result.url } : {}),
     ...(result.taskId !== undefined ? { taskId: result.taskId } : {}),
   };
@@ -143,6 +166,11 @@ export default {
         { flags: "--guidance <n>", description: "提示词引导系数（可选，1.5-20）" },
         { flags: "--seed <n>", description: "随机种子（可选，0-2147483647，同 seed 可复现）" },
         { flags: "--negative-prompt <text>", description: "负向提示词（可选）" },
+        {
+          flags: "--ref <url>",
+          description:
+            "参考图公网 URL（可选，走图生图/编辑；本地文件先用 tencent-cos-upload 换 URL）",
+        },
         {
           flags: "--output <path>",
           description: "输出图片路径（默认 ./modelscope-<时间戳>.<扩展名>）",
