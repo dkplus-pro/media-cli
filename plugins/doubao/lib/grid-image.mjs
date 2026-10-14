@@ -25,6 +25,13 @@ export const VISION_JPEG_QUALITY = 82;
 // 放大回原图后「薄条重叠」的修复阈值：重叠厚度 ÷ 较小格对应边长 ≤ 5% 才敢修。
 // 依据：±1 像素在 sx=0.766 下最多造成 ~1.3 原图像素（300px 高的格 = 0.43%）；
 // 实测真实页放大后的最坏重叠是 628x24px，厚 24/680 ≈ 3.5%；而模型把两格真框重的实测厚度是 33%。
+//
+// ⚠️ 这条窗口是**契约的一部分**，不是纯本地参数：切齐是尽力而为（grid-overlap 的 trim 会拒绝
+// 「削掉较大格 >25% 面积」的刀），所以窗口内的残渣有权被留在产物里。消费侧 media-grid-caption 的
+// 默认带子（plugins/media-image/lib/cells-geometry.mjs 的 DEFAULT_MAX_OVERLAP）**必须 ≥ 这个值**，
+// 否则「本命令有权发出的 cells JSON」会被兄弟命令的默认设置拒收，§2 的零转换契约当场失效
+// （历史上就失效过一次：这里 0.05、那里 0.02，真实页 S019 的 3.7% 重叠被硬拒）。
+// 钉这条不变量的用例在 tests/unit/grid-overlap.test.ts，改任何一侧都会红。
 export const DEFAULT_OVERLAP_LIMIT = 0.05;
 
 const MIME_BY_FORMAT = {

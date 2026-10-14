@@ -150,13 +150,14 @@ export async function locateGridWithDoubao(ctx, args) {
   if (repairedRes.remaining > 0) {
     // 修不动的大重叠：模型真的把两格框重了。留在产物里交给消费侧判定，但绝不静默
     notes.push(
-      `另有 ${repairedRes.remaining} 组格子重叠超出薄边阈值（>±${repairedRes.limit}），未自动修复`,
+      `另有 ${repairedRes.remaining} 组格子重叠幅度较大（薄边 >${repairedRes.limit}），未自动修复`,
     );
     ctx.warnings.add({
       code: "E_CELLS_OVERLAP",
       message:
         `视觉模型给出的格子里有 ${repairedRes.remaining} 组重叠幅度较大（不是放大取整能解释的）：` +
-        "media-grid-caption 会按 §2 拒绝（薄重叠只警告、大重叠报 E_INVALID_OPTION）。" +
+        `media-grid-caption 按 --max-overlap（默认 0.05，即本命令的修复窗口）分级 —— ` +
+        "面积占比在阈值内只警告并照常渲染，超过才报 E_INVALID_OPTION。" +
         "请人工编辑 --output 的 cells JSON，或改用 --cols/--rows 等分，确认是刻意的分层版式可加 --allow-overlap",
       plugin: "doubao",
     });

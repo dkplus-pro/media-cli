@@ -318,7 +318,7 @@ describe("--cols/--rows 等分与选项解析", () => {
     expect(cells.at(-1).x + cells.at(-1).w).toBe(1000);
   });
 
-  it("默认值：sans-serif / #FFFFFF / 0.75 / padding 12 / bottom / 检测开启 / 重叠按 0.02 分级", () => {
+  it("默认值：sans-serif / #FFFFFF / 0.75 / padding 12 / bottom / 检测开启 / 重叠按 0.05 分级", () => {
     expect(parseGridCaptionArgs({ input: "a.png" })).toMatchObject({
       input: "a.png",
       cellsPath: null,
@@ -334,7 +334,8 @@ describe("--cols/--rows 等分与选项解析", () => {
       bgTol: 24,
       minGutter: 3,
       allowOverlap: false,
-      maxOverlap: 0.02,
+      // 与产出侧的修复窗口（doubao 的 DEFAULT_OVERLAP_LIMIT）同值 —— 见 grid-overlap.test.ts 的不变量用例
+      maxOverlap: 0.05,
       output: null,
     });
     expect(parseGridCaptionArgs({ input: "a.png", allowOverlap: true }).allowOverlap).toBe(true);

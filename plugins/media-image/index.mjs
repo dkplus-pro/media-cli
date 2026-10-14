@@ -175,8 +175,8 @@ export default {
           flags: "--max-overlap <fraction>",
           description:
             "格子重叠的分级阈值：重叠面积占**较小格面积**的比重 ≤ 此值只发 E_CELLS_OVERLAP 警告并照常渲染，" +
-            "超过才报 E_INVALID_OPTION（默认 0.02）。视觉模型放大回原图的 ±1px 取整约 0.2%，实测误检是 22%–33%，" +
-            "所以 0.02 落在两端都有余量；范围 0-1，0 = 一点重叠都按硬错拒收",
+            "超过才报 E_INVALID_OPTION（默认 0.05，与 doubao-grid-locate 的修复窗口同值，保证产出侧发得出来的文件消费侧默认必收）。" +
+            "视觉模型坐标放大回原图的残留薄条实测 3.5%–4.6%，真误检是 11%–33%；范围 0-1，0 = 一点重叠都按硬错拒收",
         },
         {
           flags: "--allow-overlap",

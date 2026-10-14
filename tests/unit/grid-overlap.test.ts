@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { upscaleCellsToOriginal } from "../../plugins/doubao/lib/grid-image.mjs";
+import {
+  DEFAULT_OVERLAP_LIMIT,
+  upscaleCellsToOriginal,
+} from "../../plugins/doubao/lib/grid-image.mjs";
 import { repairCellOverlaps } from "../../plugins/doubao/lib/grid-overlap.mjs";
 import {
   DEFAULT_MAX_OVERLAP,
@@ -12,7 +15,9 @@ import { parseGridCaptionArgs } from "../../plugins/media-image/lib/cells-option
 
 // Issue 1 的两侧口径钉在一起测：产出侧（doubao-grid-locate）把放大取整产生的薄条重叠切齐，
 // 消费侧（media-grid-caption）把「占较小格面积 ≤ --max-overlap」的重叠降级为警告。
-// 两侧用的是**不同**判据（薄边 vs 面积占比），所以必须有一组用例证明同一份几何不会两边打架。
+// 两侧用的是**不同**判据（薄边 vs 面积占比），所以必须有一组用例证明同一份几何不会两边打架；
+// 最后那个 describe 钉的是这条链的**不变量**：产出侧修复窗口 ≤ 消费侧默认带子，
+// 于是「产出侧有权发出的文件」永远不会被消费侧默认设置拒收（面积占比恒 ≤ 薄边，见 cells-geometry 头注）。
 
 interface CliErr extends Error {
   code: string;
@@ -142,26 +147,31 @@ describe("消费侧：重叠按占较小格面积分级（cells-geometry）", ()
     { index: 1, x: 200, y: 0, w: 312, h: 300 }, // 100x300 = 占较小格 33%
   ];
 
-  it("findCellOverlaps 报出占比与薄边，分级只看占比（默认阈值 0.02）", () => {
-    expect(DEFAULT_MAX_OVERLAP).toBe(0.02);
+  it("findCellOverlaps 报出占比与薄边，分级只看占比（默认阈值与产出侧窗口同为 0.05）", () => {
+    expect(DEFAULT_MAX_OVERLAP).toBe(0.05);
     const thinFound = findCellOverlaps(thin);
     expect(thinFound.total).toBe(1);
     expect(thinFound.severe).toHaveLength(0);
     expect(thinFound.minor[0]).toMatchObject({ ratio: 0.002, cells: [0, 1] });
-    // 3% 超过 2% → 落在硬拒那一档（这正是产出侧要负责切齐的形态）
+    // 2.94% 是产出侧修复窗口（薄边 ≤5%）内的实测形态（S019 真实重叠 628x24 = 3.7% 同量级）
+    // —— 旧默认 0.02 把它判成硬错误，于是兄弟命令的产物被拒收，管线断在这里
     const sliverFound = findCellOverlaps(sliver);
-    expect(sliverFound.severe[0]).toMatchObject({ ratio: 0.0294, thickness: 0.0294 });
-    expect(sliverFound.minor).toHaveLength(0);
+    expect(sliverFound.severe).toHaveLength(0);
+    expect(sliverFound.minor[0]).toMatchObject({ ratio: 0.0294, thickness: 0.0294 });
+    // 真误检（占较小格 33%）仍然落在硬拒那一档
     expect(findCellOverlaps(severe).severe[0].ratio).toBe(0.3333);
     expect(findCellOverlaps([]).total).toBe(0);
   });
 
   it("小重叠 → overlapError 返回 null（不报错）；大重叠 → 返回 E_INVALID_OPTION", () => {
     expect(overlapError(thin, { option: "--cells" })).toBeNull();
+    // 修复窗口内的条状残渣（2.94%）默认不再拒收，只由调用方发警告
+    expect(overlapError(sliver, { option: "--cells" })).toBeNull();
     const err = overlapError(severe, { option: "--cells" });
     expect(err.code).toBe("E_INVALID_OPTION");
-    expect(err.details).toMatchObject({ reason: "overlapping_cells", severe: 1, maxOverlap: 0.02 });
+    expect(err.details).toMatchObject({ reason: "overlapping_cells", severe: 1, maxOverlap: 0.05 });
     expect(overlapError(thin, { option: "--cells", maxOverlap: 0 })).not.toBeNull();
+    expect(overlapError(sliver, { option: "--cells", maxOverlap: 0.02 })).not.toBeNull();
     expect(overlapError(severe, { option: "--cells", maxOverlap: 0.5 })).toBeNull();
     expect(overlapError(severe, { option: "--cells", allowOverlap: true })).toBeNull();
   });
@@ -196,9 +206,9 @@ describe("消费侧：重叠按占较小格面积分级（cells-geometry）", ()
 });
 
 describe("--max-overlap 选项落值", () => {
-  it("默认 0.02；小数照收；越界与非数字 E_INVALID_OPTION", () => {
-    expect(parseGridCaptionArgs({ input: "a.png" }).maxOverlap).toBe(0.02);
-    expect(parseGridCaptionArgs({ input: "a.png", maxOverlap: "0.05" }).maxOverlap).toBe(0.05);
+  it("默认 0.05（与产出侧修复窗口同值）；小数照收；越界与非数字 E_INVALID_OPTION", () => {
+    expect(parseGridCaptionArgs({ input: "a.png" }).maxOverlap).toBe(0.05);
+    expect(parseGridCaptionArgs({ input: "a.png", maxOverlap: "0.02" }).maxOverlap).toBe(0.02);
     expect(parseGridCaptionArgs({ input: "a.png", maxOverlap: "0" }).maxOverlap).toBe(0);
     expect(parseGridCaptionArgs({ input: "a.png", maxOverlap: "1" }).maxOverlap).toBe(1);
     for (const bad of ["-1", "1.5", "abc", ""]) {
@@ -206,5 +216,113 @@ describe("--max-overlap 选项落值", () => {
       expect(err.code).toBe("E_INVALID_OPTION");
       expect(err.details).toMatchObject({ option: "--max-overlap" });
     }
+  });
+});
+
+// ---------- 管线不变量（§2「产出即可消费、零转换」的数值口径） ----------
+// 不变量：**产出侧（doubao-grid-locate）跑完自己的修复 passes 之后有权发出的任何 cells JSON，
+// 消费侧（media-grid-caption）在默认设置下必须收**（可以是警告，不能是 E_INVALID_OPTION）。
+// 断链的实际形态：这里 0.02、那里 0.05 —— 真实页 S019 的 628x24px 重叠（占较小格 3.7%）
+// 由 doubao 产出、又被 doubao 的窗口判为「可接受的取整残渣」，却被消费端默认设置硬拒。
+describe("管线不变量：产出侧发得出来的文件，消费侧默认必须收", () => {
+  const ACTUAL = { width: 2048, height: 2048 };
+  const doc = (cells: unknown[]) => ({ cells, image: ACTUAL, source: "vision" });
+
+  it("两侧阈值同源：消费侧默认带子 ≥ 产出侧修复窗口，且实现上就是同一个数", () => {
+    expect(DEFAULT_MAX_OVERLAP).toBeGreaterThanOrEqual(DEFAULT_OVERLAP_LIMIT);
+    expect(DEFAULT_MAX_OVERLAP).toBe(DEFAULT_OVERLAP_LIMIT);
+  });
+
+  // 面积占比 ≤ 薄边（较小格 S：ratio = (box.w/S.w)·(box.h/S.h)，另一因子恒 ≤ 1），
+  // 所以产出侧窗口内的任意满宽条，无论有没有被切齐，消费侧都只会警告。取窗口边界附近扫一遍。
+  it.each([0.004, 0.01, 0.02, 0.0294, 0.037, 0.049, 0.05])(
+    "薄边=%s 的满宽条残渣（产出侧有权发出）在消费侧默认设置下被接受",
+    (thinness) => {
+      const h = 1000;
+      const strip = Math.round(thinness * h);
+      const cells = [
+        { index: 0, x: 0, y: 0, w: 1000, h },
+        { index: 1, x: 0, y: h - strip, w: 1000, h },
+      ];
+      const found = findCellOverlaps(cells);
+      expect(found.severe).toHaveLength(0);
+      expect(overlapError(cells, { option: "--cells" })).toBeNull();
+      const ok = validateCells(doc(cells), { actual: ACTUAL });
+      expect(ok.overlaps.minor.length).toBe(1);
+    },
+  );
+
+  it("实测形状：S019 真实重叠 628x24px（占较小格 3.7%）→ 不再 E_INVALID_OPTION", () => {
+    const cells = [
+      { index: 2, x: 1413, y: 8, w: 628, h: 649 },
+      { index: 5, x: 1412, y: 633, w: 630, h: 700 },
+    ];
+    const ok = validateCells(doc(cells), { actual: ACTUAL });
+    expect(ok.overlaps.severe).toHaveLength(0);
+    expect(ok.overlaps.minor[0]).toMatchObject({ w: 628, h: 24, ratio: 0.037 });
+    // 老阈值下这份文件会被拒（钉住「谁把默认调小就回归」）
+    expect(overlapError(cells, { option: "--cells", maxOverlap: 0.02 })).not.toBeNull();
+  });
+
+  it("最坏情况：落在产出侧窗口内、但切齐被主动放弃（削掉较大格 >25% 面积）的残渣 → 消费侧仍收", () => {
+    const cells = [
+      { index: 0, x: 0, y: 0, w: 1000, h: 40 }, // 较大面积 40000
+      { index: 1, x: 0, y: 28, w: 40, h: 300 }, // 较小面积 12000，重叠 40x12
+    ];
+    const produced = repairCellOverlaps(cells, { limit: DEFAULT_OVERLAP_LIMIT });
+    // 薄边 12/300 = 4% 在产出侧窗口内，但切这一刀要削掉较大格 30% 面积 → 产出侧不敢动，原样落盘
+    expect(produced.cells).toEqual(cells);
+    expect(produced.repaired).toBe(0);
+    expect(produced.remaining).toBe(1);
+    const found = findCellOverlaps(produced.cells);
+    expect(found.minor[0]).toMatchObject({ ratio: 0.04 });
+    expect(found.severe).toHaveLength(0);
+    const canvas = { width: 1024, height: 512 };
+    const ok = validateCells(
+      { cells: produced.cells, image: canvas, source: "vision" },
+      { actual: canvas },
+    );
+    expect(ok.cells).toHaveLength(2);
+    expect(ok.overlaps.minor).toHaveLength(1);
+  });
+
+  it("产出侧切齐后的产物（重叠归零）自然被消费侧收下，且一条警告都不发", () => {
+    const cells = [
+      { index: 0, x: 0, y: 0, w: 1000, h: 1000 },
+      { index: 1, x: 0, y: 950, w: 1000, h: 1000 }, // 满宽 50px 重叠 = 薄边 5%
+    ];
+    const produced = repairCellOverlaps(cells, { limit: DEFAULT_OVERLAP_LIMIT });
+    expect(produced.repaired).toBe(1);
+    expect(produced.remaining).toBe(0);
+    const ok = validateCells(doc(produced.cells), { actual: ACTUAL });
+    expect(ok.overlaps.total).toBe(0);
+    expect(ok.overlaps.minor).toHaveLength(0);
+  });
+
+  it("真·坏重叠不放过：两格 30% 重合 → 默认仍然 E_INVALID_OPTION（details 点名两格）", () => {
+    const coincident = [
+      { index: 0, x: 0, y: 0, w: 1000, h: 1000 },
+      { index: 1, x: 0, y: 300, w: 1000, h: 1000 }, // 重叠 1000x700 → 占较小格 70%
+    ];
+    const err = capture(() => validateCells(doc(coincident), { actual: ACTUAL }));
+    expect(err.code).toBe("E_INVALID_OPTION");
+    expect(err.details).toMatchObject({ reason: "overlapping_cells", cells: [0, 1], severe: 1 });
+    // 用户自己的两条出路照旧有效
+    expect(
+      validateCells(doc(coincident), { actual: ACTUAL, allowOverlap: true }).overlaps.total,
+    ).toBe(0);
+    expect(
+      validateCells(doc(coincident), { actual: ACTUAL, maxOverlap: 0.8 }).overlaps.minor,
+    ).toHaveLength(1);
+    // 实测坏例（33% / 22%）同样还在硬拒档
+    expect(
+      overlapError(
+        [
+          { index: 0, x: 0, y: 0, w: 300, h: 300 },
+          { index: 1, x: 200, y: 0, w: 312, h: 300 },
+        ],
+        { option: "--cells" },
+      ),
+    ).not.toBeNull();
   });
 });

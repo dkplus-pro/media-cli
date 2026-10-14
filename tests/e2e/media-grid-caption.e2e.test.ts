@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
@@ -298,7 +298,7 @@ describe("media-grid-caption e2e", () => {
 
   // F2：消费侧的阈值必须**有刻度**。视觉模型的坐标放大回原图必然带 ±1px 薄条（实测 0.2% 量级），
   // 一律 E_INVALID_OPTION 等于把兄弟命令 doubao-grid-locate 的产物打回去（流水线实测断在这）。
-  it("F2 小重叠（占较小格 0.8% ≤ --max-overlap 0.02）→ E_CELLS_OVERLAP 警告 + exit 0 + 照常渲染", async () => {
+  it("F2 小重叠（占较小格 0.8% ≤ --max-overlap 0.05）→ E_CELLS_OVERLAP 警告 + exit 0 + 照常渲染", async () => {
     const slight = path.join(dir, "slight-overlap.json");
     await writeFile(
       slight,
@@ -334,10 +334,92 @@ describe("media-grid-caption e2e", () => {
       bars: 2,
       layout: "in-cell",
       minorOverlaps: 1,
-      maxOverlap: 0.02,
+      maxOverlap: 0.05,
     });
     expect(await darkPixels(out, { x: 6, y: 236, w: 244, h: 12 })).toBeGreaterThan(0);
     expect(await brightPixels(out, { x: 60, y: 232, w: 130, h: 20 })).toBeGreaterThan(20);
+  });
+
+  // 管线不变量的端到端回归 —— 实测断链点就在这里。
+  // doubao-grid-locate 的修复窗口是「薄边 ≤5%」（grid-image.mjs 的 DEFAULT_OVERLAP_LIMIT），
+  // 且切齐是尽力而为（削掉较大格 >25% 面积的那一刀它主动放弃），所以窗口内的残渣**有权**被写进
+  // --output。消费侧默认带子若比它窄（旧值 0.02），兄弟命令的产物就会被 E_INVALID_OPTION 拒收、
+  // 而且**一个像素的文件都不写** —— 「产出即可消费、零转换」的冻结契约当场失效。
+  it("不变量：产出侧窗口内的实测残渣（占较小格 3.5%，> 旧默认 0.02）默认设置直接消费 → exit 0 + 真出图", async () => {
+    const residue = path.join(dir, "residue-cells.json");
+    await writeFile(
+      residue,
+      JSON.stringify({
+        cells: [
+          { index: 0, x: 0, y: 0, w: 256, h: 256 },
+          { index: 1, x: 247, y: 0, w: 256, h: 256 }, // 重叠 9x256 = 占较小格 3.5%（S019 实测 3.7% 同档）
+        ],
+        image: { width: W, height: W },
+        source: "vision",
+      }),
+    );
+    const out = path.join(dir, "residue.png");
+    const r = await run([
+      "--input",
+      grid,
+      "--cells",
+      residue,
+      "--captions",
+      captionsFile,
+      "--output",
+      out,
+    ]);
+    expect(r.code).toBe(0);
+    expect(r.j.ok).toBe(true);
+    expect(r.j.error).toBeUndefined();
+    expect(r.j.data).toMatchObject({
+      layout: "in-cell",
+      source: "vision",
+      cells: 2,
+      bars: 2,
+      minorOverlaps: 1,
+      maxOverlap: 0.05,
+    });
+    expect(r.j.warnings.find((w) => w.code === "E_CELLS_OVERLAP")?.message).toContain("9x256px");
+    // 真的落盘了（旧行为：exit 2 + 不写文件），且两格各画出一条带白字的黑条
+    expect((await sharp(out).metadata()).width).toBe(W);
+    expect(await brightPixels(out, { x: 60, y: 232, w: 130, h: 20 })).toBeGreaterThan(20);
+  });
+
+  // 不变量不是「放行一切」：真误检（两格 30% 重合）仍然硬拒、仍然不产文件
+  it("不变量的另一头：两格 30% 重合 → 默认仍然 E_INVALID_OPTION 且不写任何文件", async () => {
+    const coincident = path.join(dir, "coincident-cells.json");
+    await writeFile(
+      coincident,
+      JSON.stringify({
+        cells: [
+          { index: 0, x: 0, y: 0, w: 300, h: 300 },
+          { index: 1, x: 0, y: 210, w: 300, h: 300 }, // 重叠 300x90 = 占较小格 30%
+        ],
+        image: { width: W, height: W },
+        source: "vision",
+      }),
+    );
+    const out = path.join(dir, "coincident.png");
+    const r = await run([
+      "--input",
+      grid,
+      "--cells",
+      coincident,
+      "--captions",
+      captionsFile,
+      "--output",
+      out,
+    ]);
+    expect(r.code).toBe(2);
+    expect(r.j.error?.code).toBe("E_INVALID_OPTION");
+    expect(r.j.error?.details).toMatchObject({
+      reason: "overlapping_cells",
+      cells: [0, 1],
+      maxOverlap: 0.05,
+    });
+    expect(r.j.error?.message).toContain("占较小格 30%");
+    await expect(access(out)).rejects.toThrow();
   });
 
   it("F2 小重叠可以按 --max-overlap 收紧：0 时同一份 JSON 变成硬错误（exit 2）", async () => {
