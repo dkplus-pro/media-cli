@@ -2,8 +2,21 @@ import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { fetchImageBytes, generateImage } from "./client.mjs";
-import { DEFAULT_FAST_MODEL, loadConfig } from "./env.mjs";
+import { MODEL_CONFIG_FIELD, REF_MAX_GENERATION } from "./defaults.mjs";
+import { loadConfig } from "./env.mjs";
 import { cliError } from "./errors.mjs";
+import { resolveRef, summarizeRefs } from "./refs.mjs";
+
+// 三条命令的 defaults 拆到 lib/defaults.mjs（AGENTS.md §6 的 300 行红线）；
+// 此处再导出，`index.mjs` 与既有测试的引用路径不变
+export {
+  EDIT_DEFAULTS,
+  FAST_DEFAULTS,
+  GEN_DEFAULTS,
+  MODEL_CONFIG_FIELD,
+  REF_MAX_EDIT,
+  REF_MAX_GENERATION,
+} from "./defaults.mjs";
 
 const SIZE_RE = /^\d{3,4}x\d{3,4}$/;
 
@@ -11,6 +24,12 @@ const SIZE_RE = /^\d{3,4}x\d{3,4}$/;
 // Qwen-Image-2.1 卡片推荐的 2400/2528/2752 长边是本地 diffusers 管线，经网关会被拒
 const EDGE_MIN = 64;
 const EDGE_MAX = 2048;
+
+// steps 上限从文档的 100 收紧到 50：官方文档写 [1,100]，但 Qwen/Qwen-Image-2.1 与
+// Qwen/Qwen-Image-Edit 的网关都只收 [1,50]（实测提交期 400 原文 `steps must be in [1,50]`）。
+// 本地按 50 拦，用户传 --steps 80 拿到清楚的 E_INVALID_OPTION，而不是白跑一次提交吃 400
+export const STEPS_MAX = 50;
+export const GUIDANCE_MAX = 20;
 
 // 实测网关硬拦 prompt 长度：4001 字符被拒（"invalid prompt or prompt length more than 4000"），
 // base 2.1 与 Turbo 同一规则（网关级校验，与模型无关）。按字符计不按字节：
@@ -27,37 +46,6 @@ export const RATIOS = {
   "2:3": "1344x2016",
   "16:9": "2048x1152",
   "9:16": "1152x2048",
-};
-
-// modelscope-image-gen 与 modelscope-image-fast 走同一条流程，全部差异收敛在这两份 defaults（§4.2）
-export const GEN_DEFAULTS = {
-  modelVar: "MODELSCOPE_IMAGE_MODEL",
-  // 无内置默认模型：模型 id 按月变，缺 env 直接 E_CONFIG（与 doubao 的房子规则一致）
-  modelFallback: "",
-  stepsDefault: undefined,
-  guidanceDefault: undefined,
-  // 下限从 1.5 放宽到 1：网关实测 CFG=1 可用，而 1 正是 Turbo 的官方默认值（D25）
-  guidanceMin: 1,
-  sizeDefault: "1024x1024",
-  filePrefix: "modelscope-",
-};
-
-export const FAST_DEFAULTS = {
-  modelVar: "MODELSCOPE_FAST_MODEL",
-  // 实测 Turbo 网关可直接调；模型页元数据 SupportApiInference=false 不可信（在用的 base 2.1 同样是 false）
-  modelFallback: DEFAULT_FAST_MODEL,
-  stepsDefault: 8,
-  guidanceDefault: 1,
-  guidanceMin: 1,
-  // 用户要最大尺寸：实测 2048x2048 真出 2048x2048（每边网关上限就是 2048）
-  sizeDefault: "2048x2048",
-  filePrefix: "modelscope-fast-",
-};
-
-// defaults 里存的是环境变量名，而 loadConfig 已把变量读成 camelCase 字段，这里做一次映射
-const MODEL_CONFIG_FIELD = {
-  MODELSCOPE_IMAGE_MODEL: "model",
-  MODELSCOPE_FAST_MODEL: "fastModel",
 };
 
 export function parseSize(size) {
@@ -132,7 +120,7 @@ function extensionFor(ref, fallback) {
   return fallback;
 }
 
-// 参考图只接受已经是公网 URL 的地址：本地文件先用 tencent-cos-upload 换 URL
+// gen/fast 沿用：只接受已经是公网 URL 的地址，本地文件先用 tencent-cos-upload 换 URL
 function parseRefUrl(value) {
   let url;
   try {
@@ -152,19 +140,37 @@ function parseRefUrl(value) {
   return value;
 }
 
-// Qwen-Image-2.1 卡片：单次最多 10 张参考图
-export function parseRefUrls(values) {
+// commander 的 variadic 在只传一项时也可能给字符串，统一归一；张数上限本地先拦（省一次 400）
+function refList(values, max) {
   const list = Array.isArray(values) ? values : [values];
   if (list.length === 0) {
-    throw cliError("E_INVALID_OPTION", "--ref 至少需要一个 URL", { option: "--ref" });
+    throw cliError("E_INVALID_OPTION", "--ref 至少需要一项", { option: "--ref" });
   }
-  if (list.length > 10) {
-    throw cliError("E_INVALID_OPTION", `--ref 最多 10 张参考图，得到 ${list.length} 张`, {
-      option: "--ref",
-      value: list.length,
-    });
+  if (list.length > max) {
+    throw cliError(
+      "E_INVALID_OPTION",
+      `--ref 最多 ${max} 张参考图，得到 ${list.length} 张（超出会被网关拒："image_url count exceeds maximum limit of ${max}"）`,
+      { option: "--ref", value: list.length, max },
+    );
   }
-  return list.map(parseRefUrl);
+  return list;
+}
+
+// Qwen-Image-2.1 卡片：单次最多 10 张参考图，且只收公网 URL
+export function parseRefUrls(values, max = REF_MAX_GENERATION) {
+  return refList(values, max).map(parseRefUrl);
+}
+
+// Qwen/Qwen-Image-Edit：上限实测 4 张，且每项可以是本地文件（内联成 data URI，见 lib/refs.mjs）
+export async function parseRefItems(values, max, cwd) {
+  return Promise.all(refList(values, max).map((item) => resolveRef(item, "--ref", cwd)));
+}
+
+// 按该命令的 defaults 决定走哪条参考图路径；返回 undefined 表示本次不发 image_url（纯文生图）
+async function collectRefs(value, defaults, cwd) {
+  return defaults.localRefs
+    ? parseRefItems(value, defaults.refMax, cwd)
+    : parseRefUrls(value, defaults.refMax);
 }
 
 // --model > 对应环境变量 > 该命令的内置默认（gen 无默认，因此缺变量即 E_CONFIG）
@@ -195,19 +201,21 @@ export async function runImageGen(ctx, args, defaults) {
   );
   const steps = optionalNumber(args.steps, defaults.stepsDefault, "--steps", {
     min: 1,
-    max: 100,
+    max: STEPS_MAX,
     integer: true,
   });
   const guidance = optionalNumber(args.guidance, defaults.guidanceDefault, "--guidance", {
     min: defaults.guidanceMin,
-    max: 20,
+    max: GUIDANCE_MAX,
   });
   const seed = optionalNumber(args.seed, undefined, "--seed", {
     min: 0,
     max: 2147483647,
     integer: true,
   });
-  const refUrls = args.ref === undefined ? undefined : parseRefUrls(args.ref);
+  // 本地文件的读取在这里发生（不发网络，也不碰配置），data URI 只进请求体
+  const refUrls =
+    args.ref === undefined ? undefined : await collectRefs(args.ref, defaults, ctx.cwd);
 
   // 配置校验必须先于任何网络请求
   const config = loadConfig();
@@ -263,7 +271,8 @@ export async function runImageGen(ctx, args, defaults) {
     model,
     size: actual ?? requested,
     keyIndex: result.keyIndex,
-    ...(refUrls === undefined ? {} : { refUrls }),
+    // 回显顺序与传入一致；data URI 一律压成摘要（base64 原文绝不进 stdout）
+    ...(refUrls === undefined ? {} : { refUrls: summarizeRefs(refUrls), refCount: refUrls.length }),
     ...(result.url !== undefined ? { sourceUrl: result.url } : {}),
     ...(result.taskId !== undefined ? { taskId: result.taskId } : {}),
   };

@@ -4,6 +4,11 @@ import { cliError } from "./errors.mjs";
 // 模型页元数据里的 SupportApiInference=false 不可信（在用的 Qwen/Qwen-Image-2.1 同样是 false）
 export const DEFAULT_FAST_MODEL = "Qwen/Qwen-Image-2.1-Turbo";
 
+// modelscope-image-edit 的内置默认模型。实测（2026-10-15）Qwen/Qwen-Image-Edit 经同一网关
+// 可直接调（POST /v1/images/generations + async 头，轮询 /v1/tasks/{id}）；
+// 同上：SupportApiInference=false 这个字段不可信，按实测为准
+export const DEFAULT_EDIT_MODEL = "Qwen/Qwen-Image-Edit";
+
 function requireUrl(raw, name) {
   if (typeof raw !== "string" || raw.trim() === "") {
     throw cliError("E_CONFIG", `缺少环境变量 ${name}`, { var: name });
@@ -57,6 +62,8 @@ export function loadConfig(env = process.env) {
     model: env.MODELSCOPE_IMAGE_MODEL ?? "",
     // 空串/纯空白视为未设置：modelscope-image-fast 会退回内置的 Turbo 默认值
     fastModel: (env.MODELSCOPE_FAST_MODEL ?? "").trim(),
+    // 同上：modelscope-image-edit 退回内置的 Qwen/Qwen-Image-Edit（实测网关可直接调）
+    editModel: (env.MODELSCOPE_EDIT_MODEL ?? "").trim(),
     timeoutMs: positiveInt(env.MODELSCOPE_TIMEOUT_MS, "MODELSCOPE_TIMEOUT_MS", 300000),
     pollIntervalMs: positiveInt(
       env.MODELSCOPE_POLL_INTERVAL_MS,

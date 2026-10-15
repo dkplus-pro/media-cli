@@ -131,6 +131,9 @@ describe("modelscope-image-fast 的 defaults（§4.2 表）", () => {
       guidanceMin: 1,
       sizeDefault: "2048x2048",
       filePrefix: "modelscope-fast-",
+      // media-30 起 defaults 多带两个参考图策略字段（fast 与 gen 同源：只收公网 URL、上限 10）
+      refMax: 10,
+      localRefs: false,
     });
   });
 
@@ -143,6 +146,8 @@ describe("modelscope-image-fast 的 defaults（§4.2 表）", () => {
       guidanceMin: 1,
       sizeDefault: "1024x1024",
       filePrefix: "modelscope-",
+      refMax: 10,
+      localRefs: false,
     });
   });
 });
@@ -214,11 +219,12 @@ describe("modelscope manifest（AGENTS.md §5 声明式契约）", () => {
       (o: { flags: string }) => o.flags,
     );
 
-  it("两个命令齐备且选项集完全一致（§4.2：只差默认值）", () => {
+  it("三个命令齐备，gen 与 fast 的选项集仍完全一致（§4.2：只差默认值）", () => {
     expect(manifest.name).toBe("modelscope-image");
     expect(manifest.commands.map((c: { name: string }) => c.name)).toEqual([
       "modelscope-image-gen",
       "modelscope-image-fast",
+      "modelscope-image-edit",
     ]);
     expect(flagsOf("modelscope-image-gen")).toEqual(flagsOf("modelscope-image-fast"));
     for (const cmd of manifest.commands) {

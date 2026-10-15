@@ -143,7 +143,7 @@ node dist/media-cli.js --json image-gen --prompt "改成水彩风" --ref apple.p
 
 调度策略：每次请求随机选一个账号发起，401/403/429/5xx 自动轮换下一账号重试，全池失败报 `E_PROVIDER_ERROR`；400 类参数错误不轮换。任何输出都不含 key。
 
-### modelscope-image（ModelScope API-Inference 生图，Qwen-Image 系列）
+### modelscope-image（ModelScope API-Inference 生图/改图，Qwen-Image 系列：gen / fast / edit 三条命令）
 
 ```bash
 # ~/.zshrc
@@ -152,6 +152,7 @@ export MODELSCOPE_API_KEY="ms-xxxxxxxx"                            # ModelScope 
 export MODELSCOPE_KEY_POOL="ms-aaaa,ms-bbbb"                       # 可选：多 token 池（逗号分隔），覆盖上面的单 key
 export MODELSCOPE_IMAGE_MODEL="Qwen/Qwen-Image-2.1"                # 默认模型名，--model 可覆盖
 export MODELSCOPE_FAST_MODEL="Qwen/Qwen-Image-2.1-Turbo"           # 可选：modelscope-image-fast 的默认模型（不配也用这个内置值）
+export MODELSCOPE_EDIT_MODEL="Qwen/Qwen-Image-Edit"                # 可选：modelscope-image-edit 的默认模型（不配也用这个内置值）
 node dist/media-cli.js --json modelscope-image-gen --prompt "一只红苹果" --output apple.png
 node dist/media-cli.js --json modelscope-image-gen --prompt "江南水乡" --size 1328x1328 --steps 40 --guidance 3.5 --seed 12345
 node dist/media-cli.js --json modelscope-image-gen --prompt "赛博城市" --negative-prompt "模糊, 低画质"
@@ -166,14 +167,23 @@ node dist/media-cli.js --json modelscope-image-gen --prompt "全景山景" --rat
 node dist/media-cli.js --json modelscope-image-fast --prompt "一只红苹果" --output apple.png
 node dist/media-cli.js --json modelscope-image-fast --prompt "赛博城市" --ratio 16:9 --seed 12345
 node dist/media-cli.js --json modelscope-image-fast --prompt "把背景换成海边日落" --ref https://cdn.example.com/tmp/a.png
+
+# 编辑档 modelscope-image-edit（Qwen/Qwen-Image-Edit）：参考图可以直接给本地文件，不用先上传 CDN
+node dist/media-cli.js --json modelscope-image-edit --prompt "保持五官与服装不变，把背景换成海边日落" --ref a.png --output edit.png
+# URL 与本地路径可混传，上限 4 张（实测网关硬拦）
+node dist/media-cli.js --json modelscope-image-edit --prompt "把两张参考图的材质统一到同一场景" \
+  --ref ./cloth.png https://cdn.example.com/tmp/plate.png --size 2048x2048 --output mix.png
+# 不传 --ref 也能提交：网关会退化成文生图（实测）
+node dist/media-cli.js --json modelscope-image-edit --prompt "一只红苹果" --output t2i.png
 ```
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
 | `MODELSCOPE_API_KEY` | 必填（或设 `MODELSCOPE_KEY_POOL`） | Bearer token；两者都缺失报 `E_CONFIG` 且不发请求 |
 | `MODELSCOPE_KEY_POOL` | 未设则用单 key | 逗号分隔的多个 token（自动 trim），设置后覆盖 `MODELSCOPE_API_KEY` |
-| `MODELSCOPE_IMAGE_MODEL` | 必填（或每次传 `--model`） | 模型 id，如 `Qwen/Qwen-Image-2.1`；可调用清单见 [AIGC 专区模型库](https://www.modelscope.cn/aigc/models) |
+| `MODELSCOPE_IMAGE_MODEL` | 必填（或每次传 `--model`） | 模型 id，如 `Qwen/Qwen-Image-2.1`；**只有 `modelscope-image-gen` 吃它**（fast 与 edit 各有自己的内置默认），可调用清单见 [AIGC 专区模型库](https://www.modelscope.cn/aigc/models) |
 | `MODELSCOPE_FAST_MODEL` | `Qwen/Qwen-Image-2.1-Turbo` | **`modelscope-image-fast` 专用**，有内置默认值（不配也能跑），`--model` 可覆盖；其余 key/池/域名/超时变量与 `modelscope-image-gen` 完全共用 |
+| `MODELSCOPE_EDIT_MODEL` | `Qwen/Qwen-Image-Edit` | **`modelscope-image-edit` 专用**，同样有内置默认值（实测网关可直接调，不配也能跑），`--model` 可覆盖；三个模型变量互不串门，其余变量与兄弟命令共用 |
 | `MODELSCOPE_BASE_URL` | `https://api-inference.modelscope.cn` | 网关根地址（不含 `/v1`，误填 `/v1` 会被自动剥掉） |
 | `MODELSCOPE_TIMEOUT_MS` | `300000` | 单次 HTTP 与整体轮询的超时上限 |
 | `MODELSCOPE_POLL_INTERVAL_MS` | `2000` | 异步任务轮询间隔 |
@@ -182,7 +192,7 @@ node dist/media-cli.js --json modelscope-image-fast --prompt "把背景换成海
 
 > 为什么需要池：实测网关对 `Qwen/Qwen-Image-2.1` 按 key 计**单并发**——已有任务在跑时同 key 再提交直接 429（`We have to rate limit you for model Qwen/Qwen-Image-2.1`）。单靠一把 key 无法并行出图。
 
-契约依据 [ModelScope API-Inference 官方文档](https://www.modelscope.cn/docs/model-service/API-Inference/intro) 的 AIGC 生图参数表：`model`/`prompt` 必填，`size` 是 **`"WxH"` 字符串**（不是 `width`/`height`；`"928*1664"` 会被网关拒：`size format should be WxH`），`steps` [1,100]、`guidance` [1,20]（下限原写 1.5，因 Turbo 官方 CFG=1 已放宽到 1）、`seed` [0,2^31-1]、`negative_prompt`、`image_url`（编辑类模型，字符串或 URL 数组）、`loras`。其中 `steps` 文档写 [1,100]，但**该模型网关实际只收到 [1,50]**（提交期 400：`steps must be in [1,50]`）——上限随模型而变，所以本地按文档的宽区间放行，越界交给网关原文报错。
+契约依据 [ModelScope API-Inference 官方文档](https://www.modelscope.cn/docs/model-service/API-Inference/intro) 的 AIGC 生图参数表：`model`/`prompt` 必填，`size` 是 **`"WxH"` 字符串**（不是 `width`/`height`；`"928*1664"` 会被网关拒：`size format should be WxH`），`steps` [1,100]、`guidance` [1,20]（下限原写 1.5，因 Turbo 官方 CFG=1 已放宽到 1）、`seed` [0,2^31-1]、`negative_prompt`、`image_url`（编辑类模型，字符串或 URL 数组）、`loras`。其中 `steps` 文档写 [1,100]，但**两个模型的网关都只收到 [1,50]**（提交期 400 原文 `steps must be in [1,50]`，`Qwen/Qwen-Image-2.1` 与 `Qwen/Qwen-Image-Edit` 实测同样），所以**本地已按实测的 50 收紧**：`--steps 80` 直接拿 `E_INVALID_OPTION`（退出码 2），不再白跑一次提交去吃 400。`seed` 的可用区间只按文档的 [0,2^31-1] 校验，网关是否另有更严的上限**待实测**。
 
 **尺寸上限以实测为准**：文档表写 Qwen-Image 档位 `[64x64, 1664x1664]`，但网关实际按**每边 `[64, 2048]`** 校验（超界在提交期直接 400：`width must be integer in [64,2048]`，不消耗出图额度），`2048x2048` 实测真出 2048×2048。注意 [Qwen-Image-2.1 仓库](https://github.com/QwenLM/Qwen-Image-2.1) 推荐的 `2400/2528/2752` 长边是**本地 diffusers 管线**的档位，经网关会被拒。
 
@@ -197,7 +207,7 @@ node dist/media-cli.js --json modelscope-image-fast --prompt "把背景换成海
 
 实测（2026-10-14）：`--ratio 16:9` 经 CLI 出真 2048×1152、无 `E_SIZE_MISMATCH` 警告。
 
-`--ref <urls...>` 透传 `image_url` 走图生图/多图参考编辑：Qwen-Image-2.1 官方卡片把它定义为「unified text-to-image generation and image editing」，并标明**单次最多 10 张参考图**。**只接受公网 http(s) URL**（本地路径不做隐式上传，先跑 `tencent-cos-upload` 换 URL）。一张时传字符串、多张时传数组（两种形态都实测生效），结果 `data.refUrls` 按传入顺序回显。
+`--ref <urls...>` 透传 `image_url` 走图生图/多图参考编辑：Qwen-Image-2.1 官方卡片把它定义为「unified text-to-image generation and image editing」，并标明**单次最多 10 张参考图**。**只接受公网 http(s) URL**（本地路径不做隐式上传，先跑 `tencent-cos-upload` 换 URL；想直接把本地文件当参考图就改用 `modelscope-image-edit`，见下一段）。一张时传字符串、多张时传数组（两种形态都实测生效），结果 `data.refUrls` 按传入顺序回显。
 
 实测（2026-10-14）：单图 `--ref` 生效——上传到 COS 的白底红苹果图，配 prompt「改成蓝色透明玻璃材质，保持构图与光照」后，输出的果柄朝向、苹果位置、背景与光照与参考图一致，只有材质被替换。多图 `--ref a b` 同样生效——用两张带**独有特征**的参考图（黄苹果+黑色五角星、紫肉+方形籽西瓜）做判据，出图两处特征同时复现，说明两张图都被消费，而非只取第一张。注意结果对象的 `sourceUrl` 路径仍写作 `aigc/text-to-image/...`，不要据此判断编辑没生效。
 
@@ -205,7 +215,11 @@ node dist/media-cli.js --json modelscope-image-fast --prompt "把背景换成海
 
 `modelscope-image-fast`（快速档）与 `modelscope-image-gen` **是同一套选项、只有默认值不同**：模型默认 `Qwen/Qwen-Image-2.1-Turbo`、`--steps 8`、`--guidance 1`、`--size 2048x2048`（网关每边实测上限），输出前缀改成 `modelscope-fast-`。实测（2026-10-14）：`2048x2048` 端到端 **37.1s**，PIL 复核确实是 2048×2048 真实像素；**同一把 key 4 路并发提交全部成功并各自出图**——上面「按 key 单并发、并发直接 429」那条结论只对 `Qwen/Qwen-Image-2.1` 成立，要并行批量出图优先用 fast。模型页元数据里的 `SupportApiInference: false` **不可信**（在用的 `Qwen/Qwen-Image-2.1` 同样标 false，实测经网关可调）。
 
-两条 modelscope 命令共用的网关硬限（实测 2026-10-14）：**prompt 上限 4000 字符**，4001 被网关拒（`invalid prompt or prompt length more than 4000`），且**按字符计不按字节**（4000 个汉字 = 12000 UTF-8 字节可通过）；超限现在由本地预检直接报 `E_INVALID_OPTION`（`details.limit`/`details.actual`），不发请求、不吃额度。尺寸仍按每边 `[64, 2048]` 校验。
+`modelscope-image-edit`（编辑档，默认模型 `Qwen/Qwen-Image-Edit`）走**同一个网关、同一条链路**（`POST /v1/images/generations` + `x-modelscope-async-mode: true` → 轮询 `GET /v1/tasks/{id}` + `x-modelscope-task-type: image_generation`），输出前缀 `modelscope-edit-`，默认 `--size 2048x2048`，`--steps`/`--guidance` 默认不传（Edit 的官方推荐档**待实测**，不替用户猜）。它相对兄弟命令的**头号差异**是参考图：**本地文件直接可用**，插件按扩展名读成 `data:image/<mime>;base64,` 内联进 `image_url`，**不需要先跑 `tencent-cos-upload` 换 CDN**——实测（2026-10-15）同一张源图以 data URI 提交后，出图的服装、徽记与五官都来自该参考图，证明 data URI 被真实消费而非静默忽略（这也是 `modelscope-image-gen`/`-fast` 没有验证过的能力，那两条仍只收公网 URL）。URL 与本地路径可混传，`data.refUrls` 按传入顺序回显，其中 data URI 一律压成 `data:<mime>;base64,<N> bytes` 摘要（`N` 是解码后的字节数），**base64 原文绝不进 stdout**。edit 的硬限都取网关实测原文：参考图**最多 4 张**（`image_url count 9 exceeds maximum limit of 4`）、prompt **4000 字符**、每边 **[64,2048]**、`steps` **[1,50]**、`guidance` **[1.0,20.0]**，超限一律本地预检 `E_INVALID_OPTION` 且不发网络。`--ref` **不是必填**：不传时网关照样接受提交并出图（退化为文生图，实测）。刻意**不接** `--ratio`：编辑类任务要跟参考图保持构图，尺寸只由 `--size` 显式给。**未实测、不当事实用**：`seed` 的真实可用区间（探测时被限流打断），以及 4 张参考图同框的**组合质量**（只验证过「4 张能提交并产出 1024x1024 图」，没有评估四张图各自的特征是否都被采纳）。
+
+并发实测（2026-10-15）：同一把 key 3 路并发提交全部成功，但**连续快发会撞按模型计的限流**，原文 `We have to rate limit you for model Qwen/Qwen-Image-Edit. If you need higher limits, please consider other (commercial) API providers.`——它就是要按 key 计的 429，现有 key 池轮换已经处理，批量提交请把间隔拉开。
+
+三条 modelscope 命令共用的网关硬限（2026-10-14 与 2026-10-15 分别实测）：**prompt 上限 4000 字符**，4001 被网关拒（`invalid prompt or prompt length more than 4000`），且**按字符计不按字节**（4000 个汉字 = 12000 UTF-8 字节可通过）；超限现在由本地预检直接报 `E_INVALID_OPTION`（`details.limit`/`details.actual`），不发请求、不吃额度。尺寸仍按每边 `[64, 2048]` 校验（`2048x2048` 实测真出 2048×2048）；`--steps` 本地硬上限已从文档的 100 收紧到**实测的 50**（`guidance` 仍为 [1,20]）。
 
 ⚠️ **ModelScope 的任务记录约 10 分钟后过期**：之后再轮询同一个 `task_id` 会回 `task not found`（形如 `{"errors":{"code":500,"message":"task not found"},"task_status":"FAILED"}`）。所以命令**拿到结果就立刻下载**（下载不带 apikey），不存在「事后补拉结果 URL」的用法——过期只能重新提交。
 
@@ -224,7 +238,7 @@ node dist/media-cli.js --json agnes-image --prompt "一只红苹果放在白桌�
 node dist/media-cli.js --json agnes-image --prompt "全景山景" --size 4K --ratio 21:9                 # 实测 6272x2688
 node dist/media-cli.js --json agnes-image --prompt "快速预览" --size 1K --output preview.png         # 实测 1024x1024，约 10s
 
-# 图生图：参考图可以直接给本地文件——读成 base64 data URI 内联，不用先上传 CDN（与 modelscope 的关键差异）
+# 图生图：参考图可以直接给本地文件——读成 base64 data URI 内联，不用先上传 CDN（modelscope 侧同样支持的只有 modelscope-image-edit）
 node dist/media-cli.js --json agnes-image --prompt "保持构图与光照，把苹果换成蓝色玻璃材质" --ref preview.png --output blue.png
 node dist/media-cli.js --json agnes-image --prompt "两张参考图同框" --ref https://cdn.example.com/a.png ./b.png --size 2K   # URL 与本地路径可混传，上限 6 张
 node dist/media-cli.js --json agnes-image --prompt "只要内联结果不要外链" --format b64
@@ -242,7 +256,7 @@ node dist/media-cli.js --json agnes-video --prompt "先占个额度" --no-wait  
 | `AGNES_API_KEY` | 必填（或设 `AGNES_KEY_POOL`） | Bearer token；两者都缺失报 `E_CONFIG` 且不发请求。错 key → 401 |
 | `AGNES_KEY_POOL` | 未设则用单 key | 逗号分隔多把（自动 trim），**非空即覆盖** `AGNES_API_KEY`；`data.keyIndex` 只回下标，任何输出都不含 key 原文 |
 | `AGNES_BASE_URL` | `https://apihub.agnes-ai.com` | **不写 `/v1`**（客户端自己拼 `/v1/images/generations`；末尾的 `/v1` 与 `/` 会被剥掉） |
-| `AGNES_IMAGE_MODEL` | `agnes-image-2.5-flash` | **有内置默认值**（与豆包/ModelScope 的「模型名必填」不同），`--model` 可覆盖 |
+| `AGNES_IMAGE_MODEL` | `agnes-image-2.5-flash` | **有内置默认值**（与豆包/`modelscope-image-gen` 的「模型名必填」不同；`modelscope-image-fast` 与 `-edit` 也各有内置默认），`--model` 可覆盖 |
 | `AGNES_VIDEO_MODEL` | `agnes-video-2.5-flash` | 同上 |
 | `AGNES_TIMEOUT_MS` | `360000` | 单次请求与整体重试预算共用的上限；i2i 实测可达 158s，别往小调 |
 | `AGNES_POLL_INTERVAL_MS` | `2000` | 仅 `agnes-video` 轮询用 |
