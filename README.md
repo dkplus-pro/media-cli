@@ -128,7 +128,8 @@ node dist/media-cli.js --json doubao-grid-locate --input 大页.png --timeout 36
 ```bash
 export AZURE_IMAGE_KEY_POOL="key1,key2"
 export AZURE_IMAGE_ENDPOINT_POOL="https://res-a.cognitiveservices.azure.com,https://res-b.cognitiveservices.azure.com"
-node dist/media-cli.js --json image-gen --prompt "一只红苹果" --output apple.png          # 纯文案
+node dist/media-cli.js --json image-gen --prompt "一只红苹果" --output apple.png          # 纯文案，默认 2880x2880（约 61s）
+node dist/media-cli.js --json image-gen --prompt "一只红苹果" --size 1024x1024 --output small.png  # 快档约 21s
 node dist/media-cli.js --json image-gen --prompt "改成水彩风" --ref apple.png --output wc.png   # 参考图（edits）
 ```
 

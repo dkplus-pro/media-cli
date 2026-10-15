@@ -18,7 +18,7 @@ async function imageGen(ctx, args) {
   if (typeof args.prompt !== "string" || args.prompt.trim() === "") {
     throw cliError("E_MISSING_ARGUMENT", "缺少必填 --prompt", { option: "--prompt" });
   }
-  const size = args.size ?? "1024x1024";
+  const size = args.size ?? "2880x2880";
   if (!SIZE_RE.test(size)) {
     throw cliError("E_INVALID_OPTION", `--size 格式非法：${size}（如 1024x1024）`, {
       option: "--size",
@@ -93,7 +93,10 @@ export default {
       options: [
         { flags: "--prompt <text>", description: "生图文案" },
         { flags: "--ref <paths...>", description: "参考图路径（可多个，走 edits 端点）" },
-        { flags: "--size <WxH>", description: "尺寸（默认 1024x1024）" },
+        {
+          flags: "--size <WxH>",
+          description: "尺寸（默认 2880x2880；实测支持，但 2880² 约 61s 而 1024² 约 21s）",
+        },
         {
           flags: "--output <path>",
           description: "输出图片路径（默认 ./generated-<时间戳>.<格式>）",

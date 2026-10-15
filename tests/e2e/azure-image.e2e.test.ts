@@ -164,7 +164,7 @@ describe("azure-image e2e（本地 mock）", () => {
       };
       expect(parsed.ok).toBe(true);
       expect(parsed.data.format).toBe("png");
-      expect(parsed.data.size).toBe("1024x1024");
+      expect(parsed.data.size).toBe("2880x2880"); // 默认档（media-29）；显式 --size 另有下面的用例守
       expect(parsed.data.bytes).toBe(PNG_BYTES.length);
       expect(parsed.data.account.index).toBe(0);
       expect(parsed.data.account.endpoint).toBe(mock.endpoint);
@@ -176,7 +176,7 @@ describe("azure-image e2e（本地 mock）", () => {
       expect(req.query).toContain("api-version=2025-04-01-preview");
       expect(JSON.parse(req.body.toString())).toEqual({
         prompt: "a red apple",
-        size: "1024x1024",
+        size: "2880x2880",
         quality: "auto",
         output_format: "png",
         n: 1,
