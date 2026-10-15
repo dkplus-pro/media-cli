@@ -2,8 +2,12 @@ import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { type CliRun, cli } from "./helpers/cli";
+
+// spawn 真进程的 e2e：全量并发时单条会超过 vitest 默认 5s（实测 F7 字号用例在满载下超时），
+// 故整文件设 30s 上限，与仓库既有慢用例显式 `, 30000)` 的口径一致。
+vi.setConfig({ testTimeout: 30_000 });
 
 // media-grid-caption 的契约全部在这里钉死：三级定位优先级、每格黑条的像素位置、
 // 墨迹量（D33 防 tofu）、兜底外扩版式、以及「条数不匹配只警告不失败」。

@@ -1,9 +1,13 @@
 import { mkdir, mkdtemp, readFile, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { cli } from "./helpers/cli.ts";
 import { type Mock, msEnv, parseError, refStub, startMock } from "./helpers/modelscope-mock.ts";
+
+// spawn 真进程的 e2e：全量并发时单条会超过 vitest 默认 5s（实测 F7 字号用例在满载下超时），
+// 故整文件设 30s 上限，与仓库既有慢用例显式 `, 30000)` 的口径一致。
+vi.setConfig({ testTimeout: 30_000 });
 
 const TURBO = "Qwen/Qwen-Image-2.1-Turbo";
 const BASE_MODEL = "Qwen/Qwen-Image-2.1";
