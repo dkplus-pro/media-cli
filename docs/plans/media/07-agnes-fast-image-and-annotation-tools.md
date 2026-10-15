@@ -37,7 +37,7 @@
 | D28 | 白圆 = 人脸框**内切圆 × `--scale`（默认 1.2）**，圆心=框中心，实心 `--color`（默认 `#FFFFFF`），SVG `<circle>` 由 sharp/librsvg 光栅化（自带抗锯齿）。输出 sidecar `<name>.covered.<ext>`，`--output` 可覆盖；`--input` 为目录时复用 `media-image` 的 `runBatch`（`sidecarTag: "covered"`，默认输出目录 `./face-cover`） | 用户选定。1.2 倍是为盖住发际线与下巴（Vision 的框通常偏紧） |
 | D29 | `doubao-grid-locate` 归 `plugins/doubao/`，复用现成的 `lib/ark.mjs` 的 `chatWithRetry` + `extractText`。模型 id **不写死**：读 `DOUBAO_VISION_MODEL`，缺失则由 `--model` 兜底，两者都缺 → `E_CONFIG`（`details.var = "DOUBAO_VISION_MODEL"`） | 用户确认 `doubao-seed-2-1-lite-260915` 可用（该模型已在收 base64 音频，收图同理）。不写死是 `plugins/doubao/lib/config.mjs:7` 的既有房子规则：豆包型号按月更新 |
 | D30 | **cells JSON 统一 schema**：`doubao-grid-locate` 的 `data` 就是 `media-grid-caption --cells` 能直接吃的格式，中间零转换、可落盘人工修改后复用。schema 见 §2（冻结，不得改动字段名） | 用户选定 |
-| D31 | `media-grid-caption` 归 `plugins/media-image/`；正常版式 = **每格底部叠半透明黑条 + 白字居中 + 自动换行 + 自动字号，不改变整图尺寸**。`--opacity` 默认 `0.75`（半透明），传 `1` 即纯黑 | 用户选定「格内底部黑条（不改尺寸）」+「半透明黑底白色文字」 |
+| D31 | `media-grid-caption` 归 `plugins/media-image/`；正常版式 = **每格底部叠半透明黑条 + 白字居中 + 自动换行 + 自动字号，不改变整图尺寸**。`--opacity` 默认 `0.1`（2026-10-15 用户指定，由 0.75 改；注意 0.1 只轻微压暗，亮底白字对比度低），传 `1` 即纯黑 | 用户选定「格内底部黑条（不改尺寸）」+「半透明黑底白色文字」 |
 | D32 | 定位优先级：`--cells` > `--cols/--rows` 等分 > 本地自动检测（`--locate`，默认开启）。**三级全失败 → 兜底：整图底部向外扩一条半透明黑边，N 条字幕按 index 顺序逐行居中**，输出图变高，`data.layout = "fallback-bottom"` + `E_GRID_NOT_DETECTED` 警告 + exit 0 | 用户原话「字幕放在图片最下方」「在底部往外扩，增加图片像素作为字幕即可，同样是半透明黑底白色文字」 |
 | D33 | 字体默认 `sans-serif`（**本机实测能正确渲染中文**），`--font <family>` 传字体族名（不是文件路径）。注意 `/System/Library/Fonts/PingFang.ttc` 在本机**不存在**，但 `PingFang SC` / `Hiragino Sans GB` / `STHeiti` / `sans-serif` 经 fontconfig 都能解析出中文字形。e2e 必须断言渲染墨迹量 > 0，防止 tofu/空图静默产出 | 实测结论，见 §1.4 |
 | D34 | **不新增任何错误码**，全部复用现有 12 个（`E_USAGE` / `E_INVALID_OPTION` / `E_MISSING_ARGUMENT` / `E_CONFIG` / `E_PROVIDER_ERROR` / `E_MISSING_DEPENDENCY` / `E_INTERNAL` 等）。新增的 `E_NO_FACE_DETECTED` / `E_GRID_NOT_DETECTED` / `E_SIZE_MISMATCH` / `E_PARTIAL_INPUT` 都是 **warning code**，按 `src/core/output/warnings.ts` 的约定 warning code 不需要登记 | 结论：本阶段**完全不动 `src/`**，风险面只在新插件与文档 |
@@ -590,7 +590,7 @@ plugins/media-image/lib/text-layout.mjs    # 自动字号 + 自动换行（复�
 | `--font <family>` | `sans-serif` | 字体**族名**（D33） |
 | `--font-size <n>` | 自动 | 覆盖自动字号，6–1000 |
 | `--text-color <hex>` | `#FFFFFF` | 走 `COLOR_RE` 校验 |
-| `--opacity <0-1>` | `0.75` | 黑底不透明度；`1` = 纯黑 |
+| `--opacity <0-1>` | `0.1` | 黑底不透明度（用户指定；很淡，亮底需自行调高）；`1` = 纯黑 |
 | `--padding <n>` | `12` | 黑条内边距（像素） |
 | `--position <bottom\|top>` | `bottom` | 格内黑条位置 |
 | `--flat-tol <n>` | `12` | 自动检测：一行/列内 max-min ≤ 此值视为纯色带 |

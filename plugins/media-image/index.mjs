@@ -156,7 +156,8 @@ export default {
         { flags: "--text-color <color>", description: "字幕颜色（默认 #FFFFFF）" },
         {
           flags: "--opacity <0-1>",
-          description: "黑条不透明度（默认 0.75 半透明；传 1 即纯黑）",
+          description:
+            "黑条不透明度（默认 0.1，很淡只轻微压暗；要看清白字可传 0.75/0.9，传 1 即纯黑）",
         },
         { flags: "--padding <px>", description: "黑条内边距像素（默认 12）" },
         {

@@ -318,7 +318,7 @@ describe("--cols/--rows 等分与选项解析", () => {
     expect(cells.at(-1).x + cells.at(-1).w).toBe(1000);
   });
 
-  it("默认值：sans-serif / #FFFFFF / 0.75 / padding 12 / bottom / 检测开启 / 重叠按 0.05 分级", () => {
+  it("默认值：sans-serif / #FFFFFF / 0.1 / padding 12 / bottom / 检测开启 / 重叠按 0.05 分级", () => {
     expect(parseGridCaptionArgs({ input: "a.png" })).toMatchObject({
       input: "a.png",
       cellsPath: null,
@@ -328,7 +328,7 @@ describe("--cols/--rows 等分与选项解析", () => {
       font: "sans-serif",
       fontSize: null,
       textColor: "#FFFFFF",
-      opacity: 0.75,
+      opacity: 0.1,
       padding: 12,
       position: "bottom",
       bgTol: 24,

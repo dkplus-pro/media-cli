@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import type { MockRequest } from "./helpers/agnes-mock.ts";
 import {
   agnesEnv,
@@ -21,6 +21,9 @@ import {
 } from "./helpers/agnes-mock.ts";
 import type { CliRun } from "./helpers/cli.ts";
 import { cli } from "./helpers/cli.ts";
+
+// 轮询/超时类用例实测会跑到 5s 以上（全量并发时更慢），整文件放宽到 30s。
+vi.setConfig({ testTimeout: 30_000 });
 
 const KEY_A = "ag-pool-a-secret";
 const KEY_B = "ag-pool-b-secret";

@@ -210,7 +210,16 @@ afterAll(async () => {
 describe("media-grid-caption e2e", () => {
   it("规则宫格不带 --cells：本地检出 4 格、每格底部黑条、整图尺寸不变", async () => {
     const out = path.join(dir, "auto.png");
-    const r = await run(["--input", grid, "--captions", captionsFile, "--output", out]);
+    const r = await run([
+      "--input",
+      grid,
+      "--captions",
+      captionsFile,
+      "--opacity",
+      "0.75",
+      "--output",
+      out,
+    ]);
     expect(r.code).toBe(0);
     expect(r.j.data).toMatchObject({
       cells: 4,
@@ -234,7 +243,16 @@ describe("media-grid-caption e2e", () => {
 
   it("F2 满幅 2x2（内容顶到图片边缘、没有外边距）：本地照样检出 4 格，source=auto", async () => {
     const out = path.join(dir, "fullbleed.png");
-    const r = await run(["--input", fullBleed, "--captions", captionsFile, "--output", out]);
+    const r = await run([
+      "--input",
+      fullBleed,
+      "--captions",
+      captionsFile,
+      "--opacity",
+      "0.75",
+      "--output",
+      out,
+    ]);
     expect(r.code).toBe(0);
     expect(r.j.data).toMatchObject({
       source: "auto",
@@ -323,6 +341,8 @@ describe("media-grid-caption e2e", () => {
       slight,
       "--captions",
       captionsFile,
+      "--opacity",
+      "0.75",
       "--output",
       out,
     ]);
@@ -625,6 +645,8 @@ describe("media-grid-caption e2e", () => {
       cellsFile,
       "--captions",
       captionsFile,
+      "--opacity",
+      "0.75",
       "--output",
       out,
     ]);

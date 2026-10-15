@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   agnesEnv,
   emptyErrorEnvelope,
@@ -18,6 +18,9 @@ import {
 } from "./helpers/agnes-mock.ts";
 import type { CliRun } from "./helpers/cli.ts";
 import { cli } from "./helpers/cli.ts";
+
+// 轮询/超时类用例实测会跑到 5s 以上（全量并发时更慢），整文件放宽到 30s。
+vi.setConfig({ testTimeout: 30_000 });
 
 interface Warn {
   code: string;

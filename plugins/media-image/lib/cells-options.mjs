@@ -94,7 +94,7 @@ export function parseGridCaptionArgs(args) {
       typeof args.font === "string" && args.font.trim() !== "" ? args.font.trim() : "sans-serif",
     fontSize: parseFontSize(args.fontSize) ?? null,
     textColor: parseColorOption(args.textColor, "--text-color", "#FFFFFF"),
-    opacity: parseOpacity(args.opacity, 0.75),
+    opacity: parseOpacity(args.opacity, 0.1),
     padding: parseIntIn(args.padding, "--padding", 12, 0, 512),
     position: parsePosition(args.position, "bottom"),
     // 选项名沿用 --flat-tol，语义已按修正后的算法改成「与背景灰度的容差」（§6.2 bgTol，默认 24）
