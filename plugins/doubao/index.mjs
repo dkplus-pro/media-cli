@@ -1,10 +1,11 @@
 import { analyzeMusicWithDoubao } from "./lib/analysis.mjs";
 import { locateGridWithDoubao } from "./lib/grid-locate.mjs";
+import { runImageGen } from "./lib/image.mjs";
 import { transcribeWithDoubao } from "./lib/transcribe.mjs";
 
 export default {
   name: "doubao",
-  version: "0.2.0",
+  version: "0.3.0",
   commands: [
     {
       name: "doubao-media-transcribe",
@@ -90,6 +91,34 @@ export default {
         },
       ],
       handler: locateGridWithDoubao,
+    },
+    {
+      name: "doubao-image-gen",
+      description:
+        "豆包文生图（火山方舟 doubao-seedream-4-5-251128，默认 2048x2048、不加水印；产物实际为 JPEG，需 DOUBAO_API_KEY）",
+      options: [
+        { flags: "--prompt <text>", description: "生图文案（必填）" },
+        {
+          flags: "--model <id>",
+          description:
+            "生图模型 id（默认 doubao-seedream-4-5-251128，可由环境变量 DOUBAO_IMAGE_MODEL 覆盖）",
+        },
+        {
+          flags: "--size <WxH>",
+          description:
+            "尺寸（默认 2048x2048；总像素须 ≥3686400，1024x1024 会被 provider 拒绝且本地即拦）",
+        },
+        { flags: "--watermark", description: "给图片加 provider 水印（默认关闭）" },
+        {
+          flags: "--output <path>",
+          description: "输出图片路径（默认 ./doubao-<时间戳>.jpeg；父目录必须已存在）",
+        },
+        {
+          flags: "--timeout <ms>",
+          description: "单次生图请求与图片下载的超时毫秒（默认 180000）",
+        },
+      ],
+      handler: runImageGen,
     },
   ],
 };

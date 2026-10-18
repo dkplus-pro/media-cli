@@ -144,6 +144,18 @@ data：`{ "path": string, "bytes": number, "format": string, "size": string, "re
 | doubao | `DOUBAO_BASE_URL` | 否 | `https://ark.cn-beijing.volces.com/api/v3` | OpenAI 兼容端点；mock 测试入口（`/api/compatible` 路径不存在） |
 | doubao | `DOUBAO_TRANSCRIBE_MODEL` | 是（或每次传 `--model`） | — | 豆包型号按月更新，**不内置默认值**；需 `input_modalities` 含 `audio`；两者都缺 → `E_CONFIG` |
 | doubao | `DOUBAO_TIMEOUT_MS` | 否 | `120000` | 单片段请求超时（转写长音频内部已切段，勿整段送模型；music-analysis 为推理密集型，请求超时下限 180s） |
+| doubao | `DOUBAO_IMAGE_MODEL` | 否 | `doubao-seedream-4-5-251128` | `doubao-image-gen` 的生图型号；`--model` 优先 |
+| banana-image | `BANANA_IMAGE_API_KEY` | 是 | — | BananaRouter Bearer key；无效（401/403）→ `E_CONFIG` |
+| banana-image | `BANANA_IMAGE_API_BASE` | 否 | `https://api.bananarouter.com` | 末尾 `/v1` 自动归一；mock 测试入口 |
+| banana-image | `BANANA_IMAGE_MODEL` | 否 | `gpt-image-2` | 该 token 按模型授权，换模型需先在控制台开通 |
+| banana-image | `BANANA_IMAGE_QUALITY` | 否 | `high` | auto/low/medium/high |
+| banana-image | `BANANA_IMAGE_OUTPUT_FORMAT` | 否 | `png` | png/jpeg/webp |
+| banana-image | `BANANA_IMAGE_TIMEOUT_MS` | 否 | `300000` | 单次请求超时；实测延迟 65–159s 抖动大 |
+| minimax | `MINIMAX_API_KEY` | 是 | — | Bearer JWT；1004/2049 与 HTTP 401/403 → `E_CONFIG` |
+| minimax | `MINIMAX_API_BASE_URL` | 否 | `https://api.minimaxi.com/v1` | 末尾 `/v1` 自动归一；兼容用户原文拼写 `MINIMAX_API_BASR_URL`（前者优先） |
+| minimax | `MINIMAX_SPEECH_MODEL` | 否 | `speech-2.8-hd` | `minimax-speech` 型号；`--model` 优先 |
+| minimax | `MINIMAX_MUSIC_MODEL` | 否 | `music-3.0` | `minimax-music` 型号；`--model` 优先 |
+| minimax | `MINIMAX_VIDEO_MODEL` | 否 | `MiniMax-H3` | `minimax-video` 型号；仅支持 H3/H3-Max；`--model` 优先 |
 
 ## 5. 错误码增量（阶段 01 登记 `src/core/errors.ts`，同步壳 00-master-plan §4.4）
 
@@ -177,6 +189,8 @@ data：`{ "path": string, "bytes": number, "format": string, "size": string, "re
 | 04 | `04-suno-music.md` | suno-music 插件：提交/轮询/下载 + 辅助命令 | 01 |
 | 05 | `05-npm-publish.md` | npm 发布准备：bundled 插件源 + `@dkplus/media-cli` 元数据 | 01–04 |
 | 06 | `06-media-cutout.md` | media-cutout 插件：macOS Vision 本地抠图（透明 PNG、bbox+边距、批量） | 01–05 |
+| 07 | `07-agnes-fast-image-and-annotation-tools.md` | Agnes 生图/生视频 + 标注工具链（faces/grid/filmstrip） | 01–06 |
+| 08 | `08-bananarouter-minimax-doubao.md` | BananaRouter gpt-image-2 + MiniMax 语音/音乐/视频 + 豆包 Seedream 生图 | 01–07 |
 
 （02–04 仅依赖 01，但按 §8 协议严格串行执行。）
 

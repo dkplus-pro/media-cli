@@ -69,7 +69,7 @@ node dist/media-cli.js --json media-compress-audio --input song.mp3 --bitrate 96
 
 依赖安装：`brew install ffmpeg`；whisper.cpp 用 `brew install whisper-cpp` 并下载 ggml 模型（base/small/medium）。ffmpeg 未编译 drawtext 时胶片图自动降级为无时间戳并附结构化警告。
 
-### doubao（豆包多模态云端转写 + 音乐理解 + 宫格定位，依赖 ffmpeg + DOUBAO_API_KEY）
+### doubao（豆包多模态云端转写 + 音乐理解 + 宫格定位 + 生图，依赖 ffmpeg + DOUBAO_API_KEY）
 
 ```bash
 export DOUBAO_API_KEY="ARK 控制台创建的 key"
@@ -104,6 +104,7 @@ node dist/media-cli.js --json doubao-grid-locate --input 大页.png --timeout 36
 | `DOUBAO_API_KEY` | 必填 | 缺失报 `E_CONFIG`；无效（401/403）同样报 `E_CONFIG` |
 | `DOUBAO_TRANSCRIBE_MODEL` | 必填（或每次传 `--model`） | 需 `input_modalities` 含 `audio` 的型号；两者都缺报 `E_CONFIG` 且不发起请求 |
 | `DOUBAO_VISION_MODEL` | 必填（或每次传 `--model`） | `doubao-grid-locate` 用的视觉型号，**不内置默认值**（豆包型号按月更新）；两者都缺报 `E_CONFIG`（`details.var="DOUBAO_VISION_MODEL"`）且不发请求 |
+| `DOUBAO_IMAGE_MODEL` | `doubao-seedream-4-5-251128` | `doubao-image-gen` 的生图型号；有内置默认值，`--model` 优先 |
 | `DOUBAO_BASE_URL` | `https://ark.cn-beijing.volces.com/api/v3` | Ark OpenAI 兼容端点（注意 `/api/compatible` 路径不存在） |
 | `DOUBAO_TIMEOUT_MS` | `120000` | 单次请求超时（转写的片段请求走它）。**`doubao-grid-locate` 例外**：本命令自带默认 `300000`（实测视觉单页 181.8s/329.6s，120s 会把正常的慢响应判成超时）；优先级 `--timeout` > `DOUBAO_TIMEOUT_MS` > 命令默认 |
 
@@ -122,6 +123,16 @@ node dist/media-cli.js --json doubao-grid-locate --input 大页.png --timeout 36
 另外两件事必须知道：
 1. **框每次都要肉眼核对**。两轮实测里一页返回 9 个位置正确的框，另一页只返回 **7** 个——模型把相邻两格**合并成一格**，于是一句台词被静默丢掉；返回 9 格的那页还出现过两格重叠 628x24px。`--expected 9` 只能让「检出数与提示数不符」附 `E_CELL_COUNT_MISMATCH` 警告，不会失败，也不保证每格都对。
 2. **格子可能带重叠**。坐标来自缩小图、放大回原图时必然取整，相邻格的公共边会错开几像素。产出侧已把「薄边 ≤5%」的重叠在重叠区内切齐（`data.overlapRepaired` 计数 + `E_CELL_OVERLAP_REPAIRED` 警告），剩下的交大重叠交给消费侧按 `--max-overlap`（默认 0.05）分级：小重叠 `E_CELLS_OVERLAP` 警告 + 照常渲染 + exit 0，大重叠才 `E_INVALID_OPTION`（exit 2），确认是刻意的分层版式用 `--allow-overlap` 全放行。
+
+豆包生图（`doubao-image-gen`）——火山方舟 Seedream 4.5，默认 2048x2048、不加水印：
+
+```bash
+node dist/media-cli.js --json doubao-image-gen --prompt "一只红苹果"                    # → ./doubao-<时间戳>.jpeg
+node dist/media-cli.js --json doubao-image-gen --prompt "电影宽幅海报" --size 2560x1440  # 最低总像素 3,686,400
+node dist/media-cli.js --json doubao-image-gen --prompt "加官方水印" --watermark         # 默认关闭
+```
+
+尺寸必须是 `WxH` 且总像素 ≥3,686,400；`1024x1024`（1,048,576 px）会被 provider 拒，插件本地预检直接报 `E_INVALID_OPTION` 且不发请求。产物实际为 JPEG，`data.size` 是 sharp 解出的真实像素（与请求值不符时附 `E_SIZE_MISMATCH` 警告）。`--timeout` 默认 180000ms，**不受 `DOUBAO_TIMEOUT_MS` 影响**（那是转写/视觉的预算）。模型默认 `doubao-seedream-4-5-251128`，可用 `DOUBAO_IMAGE_MODEL` 或 `--model` 覆盖。
 
 ### azure-image（Azure gpt-image-2 生图）
 
@@ -142,6 +153,29 @@ node dist/media-cli.js --json image-gen --prompt "改成水彩风" --ref apple.p
 | `AZURE_IMAGE_API_VERSION` | `2025-04-01-preview` | gpt-image-2 若要求更新版本，设此变量即可 |
 
 调度策略：每次请求随机选一个账号发起，401/403/429/5xx 自动轮换下一账号重试，全池失败报 `E_PROVIDER_ERROR`；400 类参数错误不轮换。任何输出都不含 key。
+
+### banana-image（BananaRouter gpt-image-2 生图/改图）
+
+```bash
+# ~/.zshrc
+export BANANA_IMAGE_API_KEY="sk-xxxxxxxx"                      # BananaRouter 令牌（按 token 逐模型授权）
+export BANANA_IMAGE_API_BASE="https://api.bananarouter.com"   # 末尾误填的 /v1 与斜杠会自动剥掉
+node dist/media-cli.js --json banana-image-gen --prompt "一只红苹果" --output apple.png   # 默认 quality=high、1024x1024
+node dist/media-cli.js --json banana-image-gen --prompt "改成水彩风" --ref apple.png --output wc.png
+node dist/media-cli.js --json banana-image-gen --prompt "电影海报" --size 1536x1024 --quality medium
+node dist/media-cli.js --json banana-image-gen --prompt "让模型自己选尺寸" --size auto
+```
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `BANANA_IMAGE_API_KEY` | 必填 | Bearer token；缺失或 401/403 → `E_CONFIG`（`details.var` 指明变量） |
+| `BANANA_IMAGE_API_BASE` | `https://api.bananarouter.com` | mock 测试入口；末尾 `/v1` 自动归一 |
+| `BANANA_IMAGE_MODEL` | `gpt-image-2` | 该 token 只授权已开通的模型；换模型先在控制台开通 |
+| `BANANA_IMAGE_QUALITY` | `high` | `auto`/`low`/`medium`/`high`；用户要求默认高质量 |
+| `BANANA_IMAGE_OUTPUT_FORMAT` | `png` | `png`/`jpeg`/`webp` |
+| `BANANA_IMAGE_TIMEOUT_MS` | `300000` | 单次请求超时；实测延迟 65–159s 抖动大 |
+
+尺寸规则（实测文档，2026-10-18）：每边 ≤3840、必须是 16 的倍数、长短边比 ≤3:1、总像素 655360–8294400；`--size auto` 合法，默认 `1024x1024`。**网关对非法尺寸不报错而是静默降级成 2880x2880**，所以插件在本地预检并报 `E_INVALID_OPTION`（不发请求）。`--ref` 只收本地 `jpg/jpeg/png/webp`，走 multipart `/v1/images/edits`；传了参考图就不要再传公网 URL。`data.size` 是 sharp 解出的真实像素，与请求值不一致时附 `E_SIZE_MISMATCH` 警告（`--size auto` 不比对）。
 
 ### modelscope-image（ModelScope API-Inference 生图/改图，Qwen-Image 系列：gen / fast / edit 三条命令）
 
@@ -267,6 +301,37 @@ node dist/media-cli.js --json agnes-video --prompt "先占个额度" --no-wait  
 参考图（`--ref`，实测上限 **6 张**）是 agnes 与 modelscope 最容易选错的地方：**本地文件直接可用**，插件读成 `data:image/<fmt>;base64,` 内联进请求，**不需要先 `tencent-cos-upload`**（实测 4096x4096 / 10.5MB 的 PNG 内联成约 14MB 的 data URI 也被接受）；http(s) URL 原样透传，两种形态可混传。传了 `--ref` 即走图生图，`data.mode="i2i"`，并且结果 URL 的路径段可交叉验证（`/images/t2i/…` vs `/images/i2i/…`）。耗时实测（2026-10-14）：1K 文生图约 10s、4K 约 20–28s、一次 i2i 编辑 **20–158s**；3 路并发文生图全部成功。i2i 通道会间歇回 **HTTP 503 `image queue is full`**（1–3s 内快速失败）——这是 provider 侧容量，**与你的 key、payload 体积都无关**（已专项验证：同一 payload 有时 200 有时 503，很小与很大的请求体都吃过 503），命令在同一把 key 上原地退避重试（`AGNES_MAX_RETRIES`/`AGNES_TIMEOUT_MS`），重试进度写 stderr，调用方只看最终结果。
 
 > ⚠️ **`agnes-video` 的出片行为待实测。** 已实测的是**提交与校验侧**：三种 `--mode`（`text`/`keyframe`/`reference`）的本地校验全部生效，`seconds` 在 provider 侧是 **JSON 字符串**（插件已自动转换，取值 4–12，默认 5），`size` **只接受 `720P`**（其他值本地即拒，provider 直接 400），`images` ≤5、`audios` ≤3，且素材**只收公网 URL**（本地路径报 `E_INVALID_OPTION` 并提示先跑 `tencent-cos-upload`）。**未实测**：一条真实视频都没生成成功过——探测期间视频通道对连续 18 次间隔提交（跨 22 分钟）全部返回 503 `video_queue_full`，更早一个窗口连续 66 分钟同样，而同一把 key 约 94s 后图片通道仍是 HTTP 200（所以是通道容量，不是账号或额度）。因此**视频的时长、`status` 生命周期、轮询路由一律按未知处理**：两条候选轮询路由只用假 id 探过（`/agnesapi?video_id=` → 404 `task not found`，`/v1/videos/{id}` → 400 `task_not_exist`；`/v1/tasks/{id}` 不存在）。另外实测到约 20s 内连发 3 次提交会撞免费档 429、约 3.5 分钟自愈，**批量提交请把间隔拉到 ≥75s**。prompt 长度上限同样待实测，所以未做本地预检。
+
+### minimax（MiniMax 语音合成 / 音乐生成 / 文生视频）
+
+```bash
+# ~/.zshrc
+export MINIMAX_API_KEY="eyJhbGciOi..."                               # Bearer JWT
+export MINIMAX_API_BASE_URL="https://api.minimaxi.com/v1"            # 末尾 /v1 自动归一（兼容 MINIMAX_API_BASR_URL 拼写）
+node dist/media-cli.js --json minimax-speech --text "你好，欢迎使用 media-cli" --output hello.mp3
+node dist/media-cli.js --json minimax-speech --text "旁白" --voice male-qn-qingse --speed 0.9 --emotion calm
+node dist/media-cli.js --json minimax-music --prompt "温暖治愈的钢琴曲" --instrumental --output bgm.mp3
+node dist/media-cli.js --json minimax-music --prompt "流行摇滚" --lyrics "第一句\n第二句" --output song.mp3
+node dist/media-cli.js --json minimax-video --prompt "海边日落，镜头缓慢推进" --duration 5 --resolution 768P --ratio 16:9
+```
+
+| 环境变量 | 默认 | 说明 |
+|---|---|---|
+| `MINIMAX_API_KEY` | 必填 | Bearer JWT；缺失、HTTP 401/403、`base_resp` 1004/2049 → `E_CONFIG` |
+| `MINIMAX_API_BASE_URL` | `https://api.minimaxi.com/v1` | 国际站 `api.minimax.io` 同构；末尾 `/v1` 自动剥掉。也接受 `MINIMAX_API_BASR_URL`（用户原文拼写，前者优先） |
+| `MINIMAX_SPEECH_MODEL` | `speech-2.8-hd` | `minimax-speech` 型号，`--model` 优先 |
+| `MINIMAX_MUSIC_MODEL` | `music-3.0` | `minimax-music` 型号，`--model` 优先 |
+| `MINIMAX_VIDEO_MODEL` | `MiniMax-H3` | `minimax-video` 型号；仅支持 `MiniMax-H3` / `MiniMax-H3-Max`，`--model` 优先 |
+
+三条命令的产物都是**同步落盘**：语音/音乐返回 hex 音频（也兼容 URL 下载），视频是提交 + 轮询 + 下载。
+
+`minimax-speech`：文本上限 10000 字符；默认音色 `female-shaonv`，`--speed` 0.5–2、`--vol` (0,10]、`--pitch` -12–12，`--emotion` 可选 `happy|sad|angry|fearful|disgusted|surprised|calm|fluent|whisper`。**不发送 `audio_setting`**（实测极易触发 `invalid params`），输出 mp3。
+
+`minimax-music`：`--instrumental` 纯音乐模式必须给 `--prompt`（风格/情绪）；非纯音乐必须给 `--lyrics` 或 `--lyrics-optimizer`（由 prompt 自动生成歌词）。prompt ≤2000 字符、lyrics ≤3500 字符。同步接口，全曲响应体可达约 10MB，`--timeout` 默认 600000ms。
+
+`minimax-video`：只做文生视频（H3/H3-Max）。默认 `MiniMax-H3`、5s、768P、16:9；H3 支持 `768P|2K` + 4–15s，H3-Max 支持 `480P|768P` + 5–15s，ratio 枚举 `21:9|16:9|4:3|1:1|3:4|9:16`（t2v 不接受 `adaptive`）。实测 H3 5s/768P/16:9 约 118s 出片，成片自带音轨；`--timeout` 默认 900000ms，轮询间隔 `--poll-interval` 默认 5000ms。超时报 `E_PROVIDER_ERROR` 并保留 `details.taskId`——任务可能仍在 provider 侧运行。
+
+错误判定不只看 HTTP 状态：音频侧还要看 `base_resp.status_code`（1008 余额不足、1002/1039 限流、2013 参数异常），视频侧看 `task.status` 与 `task.error`；所有错误细节放 `details`，任何输出都不含 key。
 
 ### tencent-cos（腾讯云 COS 文件上传，换公网 URL）
 
