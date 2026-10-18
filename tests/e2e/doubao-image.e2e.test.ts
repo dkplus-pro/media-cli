@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -188,6 +188,114 @@ describe("doubao-image-gen e2e", () => {
     await mock.close();
   });
 
+  it("--ref 本地文件：读成 data URI 内联提交，结果只回摘要不回 base64", async () => {
+    const behavior: MockBehavior = (req, endpoint) => {
+      if (req.path === "/images/generations") {
+        return { body: { data: [{ url: `${endpoint}/files/out.jpeg` }] } };
+      }
+      if (req.path === "/files/out.jpeg") {
+        return { binary: REAL_PNG, headers: { "content-type": "image/png" } };
+      }
+      return { status: 404, body: { error: { message: "unexpected path" } } };
+    };
+    const mock = await startMock(behavior);
+    await writeFile(path.join(dir, "ref.png"), REAL_PNG);
+    const run = await cli(
+      [
+        "--json",
+        "doubao-image-gen",
+        "--prompt",
+        "改成夜景",
+        "--ref",
+        "ref.png",
+        "--output",
+        path.join(dir, "edit.jpeg"),
+      ],
+      doubaoImageEnv(mock.endpoint),
+      dir,
+    );
+    expect(run.code).toBe(0);
+    expect(requestJson(mock)).toMatchObject({
+      image: `data:image/png;base64,${REAL_PNG.toString("base64")}`,
+    });
+    expect(parseData(run)).toMatchObject({
+      refs: [`data:image/png;base64,${REAL_PNG.length} bytes`],
+    });
+    expect(run.stdout).not.toContain(REAL_PNG.toString("base64"));
+    await mock.close();
+  });
+
+  it("多张 --ref → image 为数组；http(s) 项原样透传不读盘", async () => {
+    const mock = await startMock(() => ({
+      body: { data: [{ b64_json: REAL_PNG.toString("base64") }] },
+    }));
+    await writeFile(path.join(dir, "ref.png"), REAL_PNG);
+    const run = await cli(
+      [
+        "--json",
+        "doubao-image-gen",
+        "--prompt",
+        "p",
+        "--ref",
+        "https://cdn/x.png",
+        "ref.png",
+        "--output",
+        path.join(dir, "multi.jpeg"),
+      ],
+      doubaoImageEnv(mock.endpoint),
+      dir,
+    );
+    expect(run.code).toBe(0);
+    expect(requestJson(mock).image).toEqual([
+      "https://cdn/x.png",
+      `data:image/png;base64,${REAL_PNG.toString("base64")}`,
+    ]);
+    expect(parseData(run)).toMatchObject({
+      refs: ["https://cdn/x.png", `data:image/png;base64,${REAL_PNG.length} bytes`],
+    });
+    await mock.close();
+  });
+
+  it("参考图读不到 → 本地即拒且不碰网络（不白扣一次生图额度）", async () => {
+    const mock = await startMock(() => ({ body: { data: [] } }));
+    const missing = await cli(
+      [
+        "--json",
+        "doubao-image-gen",
+        "--prompt",
+        "p",
+        "--ref",
+        "nope.png",
+        "--output",
+        path.join(dir, "n.jpeg"),
+      ],
+      doubaoImageEnv(mock.endpoint),
+      dir,
+    );
+    expect(missing.code).toBe(2);
+    expect(parseError(missing).code).toBe("E_MISSING_ARGUMENT");
+
+    await writeFile(path.join(dir, "bad.svg"), Buffer.from([1]));
+    const badExt = await cli(
+      [
+        "--json",
+        "doubao-image-gen",
+        "--prompt",
+        "p",
+        "--ref",
+        "bad.svg",
+        "--output",
+        path.join(dir, "g.jpeg"),
+      ],
+      doubaoImageEnv(mock.endpoint),
+      dir,
+    );
+    expect(badExt.code).toBe(2);
+    expect(parseError(badExt).code).toBe("E_INVALID_OPTION");
+    expect(mock.requests).toHaveLength(0);
+    await mock.close();
+  });
+
   it("spec 列出 doubao-image-gen 的全部选项", async () => {
     const run = await cli(["--json", "spec"]);
     expect(run.code).toBe(0);
@@ -198,6 +306,7 @@ describe("doubao-image-gen e2e", () => {
     expect(command?.source).toBe("plugin:doubao");
     expect(command?.options?.map((option) => option.flags)).toEqual([
       "--prompt <text>",
+      "--ref <pathsOrUrls...>",
       "--model <id>",
       "--size <WxH>",
       "--watermark",

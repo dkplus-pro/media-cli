@@ -5,7 +5,7 @@ import { transcribeWithDoubao } from "./lib/transcribe.mjs";
 
 export default {
   name: "doubao",
-  version: "0.3.0",
+  version: "0.4.0",
   commands: [
     {
       name: "doubao-media-transcribe",
@@ -95,9 +95,14 @@ export default {
     {
       name: "doubao-image-gen",
       description:
-        "豆包文生图（火山方舟 doubao-seedream-4-5-251128，默认 2048x2048、不加水印；产物实际为 JPEG，需 DOUBAO_API_KEY）",
+        "豆包文生图/图生图（火山方舟 doubao-seedream-4-5-251128，默认 2048x2048、不加水印；产物实际为 JPEG；--ref 给参考图即切图生图，本地文件直接内联不用先上 CDN，需 DOUBAO_API_KEY）",
       options: [
         { flags: "--prompt <text>", description: "生图文案（必填）" },
+        {
+          flags: "--ref <pathsOrUrls...>",
+          description:
+            "参考图（2-14 张为多图融合，1 张为单图编辑；上限 14 = provider 实测硬线）：本地文件读成 data:image/...;base64, 内联（jpeg/png/webp/bmp/tiff/gif/heic/heif，单张 ≤30MB），http(s) URL 原样透传由服务端下载；不传即文生图",
+        },
         {
           flags: "--model <id>",
           description:

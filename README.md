@@ -124,15 +124,19 @@ node dist/media-cli.js --json doubao-grid-locate --input 大页.png --timeout 36
 1. **框每次都要肉眼核对**。两轮实测里一页返回 9 个位置正确的框，另一页只返回 **7** 个——模型把相邻两格**合并成一格**，于是一句台词被静默丢掉；返回 9 格的那页还出现过两格重叠 628x24px。`--expected 9` 只能让「检出数与提示数不符」附 `E_CELL_COUNT_MISMATCH` 警告，不会失败，也不保证每格都对。
 2. **格子可能带重叠**。坐标来自缩小图、放大回原图时必然取整，相邻格的公共边会错开几像素。产出侧已把「薄边 ≤5%」的重叠在重叠区内切齐（`data.overlapRepaired` 计数 + `E_CELL_OVERLAP_REPAIRED` 警告），剩下的交大重叠交给消费侧按 `--max-overlap`（默认 0.05）分级：小重叠 `E_CELLS_OVERLAP` 警告 + 照常渲染 + exit 0，大重叠才 `E_INVALID_OPTION`（exit 2），确认是刻意的分层版式用 `--allow-overlap` 全放行。
 
-豆包生图（`doubao-image-gen`）——火山方舟 Seedream 4.5，默认 2048x2048、不加水印：
+豆包生图（`doubao-image-gen`）——火山方舟 Seedream 4.5，默认 2048x2048、不加水印；给 `--ref` 即图生图：
 
 ```bash
 node dist/media-cli.js --json doubao-image-gen --prompt "一只红苹果"                    # → ./doubao-<时间戳>.jpeg
 node dist/media-cli.js --json doubao-image-gen --prompt "电影宽幅海报" --size 2560x1440  # 最低总像素 3,686,400
 node dist/media-cli.js --json doubao-image-gen --prompt "加官方水印" --watermark         # 默认关闭
+node dist/media-cli.js --json doubao-image-gen --prompt "把这只猫改成戴红帽、雪景" --ref cat.png   # 图生图，本地文件直接给
+node dist/media-cli.js --json doubao-image-gen --prompt "合成一张" --ref a.png https://cdn/b.png   # 多参考图，上限 14 张
 ```
 
-尺寸必须是 `WxH` 且总像素 ≥3,686,400；`1024x1024`（1,048,576 px）会被 provider 拒，插件本地预检直接报 `E_INVALID_OPTION` 且不发请求。产物实际为 JPEG，`data.size` 是 sharp 解出的真实像素（与请求值不符时附 `E_SIZE_MISMATCH` 警告）。`--timeout` 默认 180000ms，**不受 `DOUBAO_TIMEOUT_MS` 影响**（那是转写/视觉的预算）。模型默认 `doubao-seedream-4-5-251128`，可用 `DOUBAO_IMAGE_MODEL` 或 `--model` 覆盖。
+尺寸必须是 `WxH` 且总像素在 **3,686,400 – 16,777,216**（官方模型页写的分辨率区间 2560\*1440 – 4096\*4096，两端均已实测为总像素口径）；`1024x1024` 报 `must be at least 3686400 pixels`、`8192x8192` 报 `must be at most 16777216 pixels`，插件本地预检直接报 `E_INVALID_OPTION` 且不发请求。产物实际为 JPEG，`data.size` 是 sharp 解出的真实像素（与请求值不符时附 `E_SIZE_MISMATCH` 警告）。`--timeout` 默认 180000ms，**不受 `DOUBAO_TIMEOUT_MS` 影响**（那是转写/视觉的预算）。模型默认 `doubao-seedream-4-5-251128`，可用 `DOUBAO_IMAGE_MODEL` 或 `--model` 覆盖。
+
+图生图与文生图**共用同一端点同一模型**，请求体只多一个 `image` 字段——官方 API 文档给的类型就是 `string / string[]`，插件按张数自动选（1 张字符串、多张数组）。`--ref` 的本地文件会读成 `data:image/<mime>;base64,` 内联提交（格式 jpeg/png/webp/bmp/tiff/gif/heic/heif、单张 ≤30MB，均为文档口径），**不需要先跑 `tencent-cos-upload` 换 CDN**；http(s) URL 原样透传、由 Ark 服务端下载，所以内网/失效地址会在 provider 侧报下载失败。张数 2–14（14 为实测硬线，16 张报 `number of reference images cannot exceed 14`）。`data.refs` 只回 `data:<mime>;base64,<N> bytes` 摘要，base64 原文不进 stdout。实测 2048x2048 单张参考图 11.8s（同尺寸文生图 7.1s，慢约 65%），控制台定价两档同价 **0.25 元/张**。
 
 ### azure-image（Azure gpt-image-2 生图）
 

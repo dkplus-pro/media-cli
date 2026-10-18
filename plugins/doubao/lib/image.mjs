@@ -3,20 +3,34 @@ import path from "node:path";
 import sharp from "sharp";
 import { getConfig } from "./config.mjs";
 import { cliError } from "./errors.mjs";
+import {
+  fetchImageBytes,
+  imageOf,
+  providerMessageOf,
+  requestGeneration,
+  SOURCE,
+  scrub,
+} from "./image-client.mjs";
+import { resolveRefs, summarizeRefs } from "./image-refs.mjs";
 
 // 火山方舟生图（media-08 / D42）：POST /images/generations → TOS 签名 URL → 不带 Authorization 下载落盘。
 // 与转写/视觉不同，这里不复用 lib/ark.mjs 的 chatWithRetry：端点与响应形态都不同，
 // 且生图没有「空内容」概念。错误码只复用已登记的 E_CONFIG / E_PROVIDER_ERROR /
 // E_MISSING_ARGUMENT / E_INVALID_OPTION（D43），细节放 details。
+// 本文件只做参数解析与编排：HTTP 与错误摊平在 lib/image-client.mjs，参考图（图生图）
+// 解析在 lib/image-refs.mjs——图生图与文生图共用本端点与本模型，只多一个 `image` 字段。
 
 const DEFAULT_MODEL = "doubao-seedream-4-5-251128";
 const MODEL_VAR = "DOUBAO_IMAGE_MODEL";
 const DEFAULT_SIZE = "2048x2048";
 const DEFAULT_TIMEOUT_MS = 180_000;
-// 实测下限 3,686,400 px：1024x1024（1,048,576 px）会被 provider 拒，必须本地先拦（省一次额度）
+// 官方模型详情页（控制台 doubao-seedream-4-5）写的分辨率区间 2560*1440 – 4096*4096，
+// 两端均已实测为总像素口径：1920x1920 与 2560x1440 都恰好 3,686,400 px 通过，
+// 1024x1024 报 "must be at least 3686400 pixels"、8192x8192 报 "must be at most 16777216 pixels"。
+// 本地先拦两端：省一次往返，且报错比 provider 的英文原文可读。
 const MIN_PIXELS = 3_686_400;
+const MAX_PIXELS = 16_777_216;
 const SIZE_RE = /^(\d{3,5})x(\d{3,5})$/;
-const SOURCE = "doubao-image";
 
 function requirePrompt(value) {
   if (typeof value !== "string" || value.trim() === "") {
@@ -25,7 +39,7 @@ function requirePrompt(value) {
   return value.trim();
 }
 
-// 只收 WxH（provider 实测格式）；总像素低于下限本地即拒，绝不发网络
+// 只收 WxH（provider 实测格式）；总像素越出区间本地即拒，绝不发网络
 export function parseImageSize(value = DEFAULT_SIZE) {
   const raw = String(value).trim();
   const match = SIZE_RE.exec(raw);
@@ -41,6 +55,13 @@ export function parseImageSize(value = DEFAULT_SIZE) {
       "E_INVALID_OPTION",
       `--size 总像素不得少于 ${MIN_PIXELS}（provider 实测下限，${raw} 只有 ${pixels} px，1024x1024 会被拒）`,
       { option: "--size", value: raw, pixels, minPixels: MIN_PIXELS },
+    );
+  }
+  if (pixels > MAX_PIXELS) {
+    throw cliError(
+      "E_INVALID_OPTION",
+      `--size 总像素不得多于 ${MAX_PIXELS}（provider 实测上限 = 4096x4096，${raw} 有 ${pixels} px）`,
+      { option: "--size", value: raw, pixels, maxPixels: MAX_PIXELS },
     );
   }
   return raw;
@@ -59,8 +80,10 @@ function parseTimeoutMs(raw) {
   return n;
 }
 
-// 请求体字段全部为实测被接受的最小集：url 取件、默认不加水印、关掉组图（一次一张）
-export function buildImageBody({ model, prompt, size, watermark }) {
+// 请求体字段全部为实测被接受的最小集：url 取件、默认不加水印、关掉组图（一次一张）。
+// refs 为空时**一个字段都不加**（保持文生图请求体与 media-31 完全一致）；
+// 单张传字符串、多张传数组——官方给的类型就是 string / string[]，两种形态均实测被接受。
+export function buildImageBody({ model, prompt, size, watermark, refs = [] }) {
   return {
     model,
     prompt,
@@ -68,6 +91,7 @@ export function buildImageBody({ model, prompt, size, watermark }) {
     response_format: "url",
     watermark: watermark === true,
     sequential_image_generation: "disabled",
+    ...(refs.length === 0 ? {} : { image: refs.length === 1 ? refs[0] : refs }),
   };
 }
 
@@ -105,128 +129,12 @@ function resolveOutput(ctx, raw) {
   return path.resolve(ctx.cwd, raw ?? `doubao-${stamp}.jpeg`);
 }
 
-function scrub(text, apiKey) {
-  const raw = String(text ?? "");
-  return apiKey && apiKey.length > 0 ? raw.split(apiKey).join("***") : raw;
-}
-
-// 从 provider 的错误体里摊平出人能读的原因（OpenAI 兼容的 error.message / error / message）
-function providerMessageOf(text) {
-  const raw = String(text ?? "").trim();
-  if (raw === "") return "";
-  try {
-    const payload = JSON.parse(raw);
-    const error = payload?.error;
-    if (typeof error === "string" && error.trim() !== "") return error.trim();
-    if (typeof error?.message === "string" && error.message.trim() !== "") {
-      return error.message.trim();
-    }
-    if (typeof payload?.message === "string" && payload.message.trim() !== "") {
-      return payload.message.trim();
-    }
-  } catch {
-    // 非 JSON 响应体，保留原文
-  }
-  return raw.slice(0, 300);
-}
-
-function networkError(err, timeoutMs, action) {
-  const timeout = err?.name === "AbortError" || err?.name === "TimeoutError";
-  return cliError(
-    "E_PROVIDER_ERROR",
-    timeout
-      ? `doubao ${action}超时（${timeoutMs}ms）`
-      : `doubao ${action}网络请求失败：${String(err?.message ?? err)}`,
-    { source: SOURCE, reason: timeout ? "timeout" : "network_error" },
-  );
-}
-
-async function fetchOnce(url, init, timeoutMs, action) {
-  try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
-  } catch (err) {
-    throw networkError(err, timeoutMs, action);
-  }
-}
-
-async function requestGeneration(config, body, timeoutMs) {
-  const res = await fetchOnce(
-    `${config.baseUrl}/images/generations`,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify(body),
-    },
-    timeoutMs,
-    "生图请求",
-  );
-  const text = await res.text().catch(() => "");
-  const message = scrub(providerMessageOf(text), config.apiKey);
-  if (res.status === 401 || res.status === 403) {
-    throw cliError("E_CONFIG", `DOUBAO_API_KEY 无效或无生图权限（HTTP ${res.status}）`, {
-      var: "DOUBAO_API_KEY",
-      status: res.status,
-      ...(message === "" ? {} : { providerMessage: message }),
-    });
-  }
-  if (!res.ok) {
-    throw cliError(
-      "E_PROVIDER_ERROR",
-      `doubao 生图请求失败（HTTP ${res.status}）${message === "" ? "" : `：${message}`}`,
-      {
-        source: SOURCE,
-        status: res.status,
-        ...(message === "" ? {} : { providerMessage: message }),
-      },
-    );
-  }
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw cliError("E_PROVIDER_ERROR", "doubao 生图响应不是合法 JSON", {
-      source: SOURCE,
-      reason: "bad_response",
-      body: scrub(text.slice(0, 300), config.apiKey),
-    });
-  }
-}
-
-// 结果 URL 是 TOS 签名直链：不携带 Authorization，避免把 key 发给对象存储
-async function fetchImageBytes(url, timeoutMs) {
-  const res = await fetchOnce(url, { method: "GET" }, timeoutMs, "图片下载");
-  if (!res.ok) {
-    throw cliError("E_PROVIDER_ERROR", `doubao 图片下载失败（HTTP ${res.status}）`, {
-      source: SOURCE,
-      status: res.status,
-      url,
-    });
-  }
-  try {
-    return Buffer.from(await res.arrayBuffer());
-  } catch (err) {
-    throw networkError(err, timeoutMs, "图片下载");
-  }
-}
-
-function imageOf(payload) {
-  const item = Array.isArray(payload?.data) ? payload.data[0] : undefined;
-  if (typeof item?.b64_json === "string" && item.b64_json !== "") {
-    return { buf: Buffer.from(item.b64_json, "base64") };
-  }
-  if (typeof item?.url === "string" && item.url !== "") {
-    return { url: item.url };
-  }
-  return null;
-}
-
 export async function runImageGen(ctx, args) {
-  // 本地校验一律先于网络：缺 prompt / 尺寸低于下限 / 超时非法都在这里失败
+  // 本地校验一律先于网络：缺 prompt / 尺寸越界 / 超时非法 / 参考图读不到都在这里失败
   const prompt = requirePrompt(args.prompt);
   const requestedSize = parseImageSize(args.size ?? DEFAULT_SIZE);
   const timeoutMs = parseTimeoutMs(args.timeout);
+  const refs = await resolveRefs(args.ref, ctx.cwd);
 
   const config = loadImageConfig(process.env);
   const model = resolveModel(args, config);
@@ -242,7 +150,7 @@ export async function runImageGen(ctx, args) {
 
   const payload = await requestGeneration(
     config,
-    buildImageBody({ model, prompt, size: requestedSize, watermark: args.watermark }),
+    buildImageBody({ model, prompt, size: requestedSize, watermark: args.watermark, refs }),
     timeoutMs,
   );
   const picked = imageOf(payload);
@@ -284,6 +192,8 @@ export async function runImageGen(ctx, args) {
     model,
     size: actual ?? requestedSize,
     requestedSize,
+    // 只回摘要：base64 原文进 stdout 既灌爆输出，也把参考图像素带进命令结果
+    ...(refs.length === 0 ? {} : { refs: summarizeRefs(refs) }),
     ...(picked.url === undefined ? {} : { sourceUrl: picked.url }),
     ...(payload?.usage ? { usage: payload.usage } : {}),
   };
