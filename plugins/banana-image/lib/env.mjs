@@ -1,6 +1,8 @@
 import { cliError } from "./errors.mjs";
 
 const QUALITIES = ["auto", "low", "medium", "high"];
+// 实测 2026-10-19：generations 传非法值回 "moderation must be one of: auto, low"，枚举与 Azure 一致
+const MODERATIONS = ["auto", "low"];
 const OUTPUT_FORMATS = ["png", "jpeg", "webp"];
 const DEFAULT_BASE = "https://api.bananarouter.com";
 
@@ -38,18 +40,25 @@ export function loadConfig(env = process.env) {
   if (typeof apiKey !== "string" || apiKey.trim() === "") {
     throw cliError("E_CONFIG", "缺少 BANANA_IMAGE_API_KEY", { var: "BANANA_IMAGE_API_KEY" });
   }
-  const quality = env.BANANA_IMAGE_QUALITY ?? "high";
+  const quality = env.BANANA_IMAGE_QUALITY ?? "low";
   if (!QUALITIES.includes(quality)) {
     throw cliError("E_CONFIG", `BANANA_IMAGE_QUALITY 仅支持 ${QUALITIES.join("|")}`, {
       var: "BANANA_IMAGE_QUALITY",
       value: quality,
     });
   }
-  const outputFormat = env.BANANA_IMAGE_OUTPUT_FORMAT ?? "png";
+  const outputFormat = env.BANANA_IMAGE_OUTPUT_FORMAT ?? "jpeg";
   if (!OUTPUT_FORMATS.includes(outputFormat)) {
     throw cliError("E_CONFIG", `BANANA_IMAGE_OUTPUT_FORMAT 仅支持 ${OUTPUT_FORMATS.join("|")}`, {
       var: "BANANA_IMAGE_OUTPUT_FORMAT",
       value: outputFormat,
+    });
+  }
+  const moderation = env.BANANA_IMAGE_MODERATION ?? "low";
+  if (!MODERATIONS.includes(moderation)) {
+    throw cliError("E_CONFIG", `BANANA_IMAGE_MODERATION 仅支持 ${MODERATIONS.join("|")}`, {
+      var: "BANANA_IMAGE_MODERATION",
+      value: moderation,
     });
   }
   return {
@@ -57,9 +66,10 @@ export function loadConfig(env = process.env) {
     baseUrl: normalizeBase(env.BANANA_IMAGE_API_BASE),
     model: (env.BANANA_IMAGE_MODEL ?? "").trim() || "gpt-image-2",
     quality,
+    moderation,
     outputFormat,
     timeoutMs: positiveInt(env.BANANA_IMAGE_TIMEOUT_MS, "BANANA_IMAGE_TIMEOUT_MS", 300_000),
   };
 }
 
-export { OUTPUT_FORMATS, QUALITIES };
+export { MODERATIONS, OUTPUT_FORMATS, QUALITIES };

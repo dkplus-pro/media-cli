@@ -7,12 +7,13 @@ export default {
     {
       name: "banana-image-gen",
       description:
-        "BananaRouter gpt-image-2 生图/改图（默认 quality=high、1024x1024；--ref 传本地参考图走 edits）",
+        "BananaRouter gpt-image-2 生图/改图（默认 quality=low、moderation=low、1024x1024、jpeg；--ref 走 /v1/images/edits，本地路径与 http(s) URL 可混传）",
       options: [
         { flags: "--prompt <text>", description: "生图/编辑文案（必填）" },
         {
-          flags: "--ref <paths...>",
-          description: "本地参考图路径，可多个（仅 jpg/jpeg/png/webp，走 /v1/images/edits）",
+          flags: "--ref <urlsOrPaths...>",
+          description:
+            "参考图，可多个：http(s) URL 由网关下载（本地无需先上传），本地文件读成 data URI 内联；混传时整请求走 JSON images",
         },
         {
           flags: "--size <WxH|auto>",
@@ -21,7 +22,12 @@ export default {
         },
         {
           flags: "--quality <q>",
-          description: "auto|low|medium|high（默认 high，可由 BANANA_IMAGE_QUALITY 覆盖）",
+          description: "auto|low|medium|high（默认 low，可由 BANANA_IMAGE_QUALITY 覆盖）",
+        },
+        {
+          flags: "--moderation <m>",
+          description:
+            "auto|low（默认 low，可由 BANANA_IMAGE_MODERATION 覆盖；只放宽模型侧额外过滤）",
         },
         { flags: "--output <path>", description: "输出图片路径（默认 ./banana-<时间戳>.<格式>）" },
         {

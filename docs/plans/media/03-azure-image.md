@@ -39,7 +39,7 @@ plugins/azure-image/
 ### T3 `image-gen` 命令（manifest 声明）
 
 - `--prompt` 缺失 → `E_MISSING_ARGUMENT`；`--size` 校验 `^\d{3,4}x\d{3,4}$` → 否则 `E_INVALID_OPTION`。
-- 输出：b64 → Buffer 写 `--output`（默认 `./generated-<ISO 时间戳>.png`，扩展名跟随 `AZURE_IMAGE_OUTPUT_FORMAT`）。
+- 输出：b64 → Buffer 写 `--output`（默认 `./generated-<ISO 时间戳>.<格式>`，扩展名跟随 `AZURE_IMAGE_OUTPUT_FORMAT`，默认 `jpeg`）。
 - data（契约见 master-plan §3.2）：`{ path, bytes, format, size, revisedPrompt?, account: { index, endpoint } }`。
 - human 模式输出文件路径。
 
@@ -77,3 +77,14 @@ node dist/common-cli.js --json image-gen --prompt x
 node dist/common-cli.js --json image-gen              # exit 2；E_MISSING_ARGUMENT
 node dist/common-cli.js --json spec | grep image-gen  # source 为 plugin:azure-image
 ```
+
+## 增补（media-33，2026-10-19 实测）
+
+- 新增 `--moderation`（env `AZURE_IMAGE_MODERATION`，默认 `low`，枚举 `auto|low`）：generations 进 JSON 体、edits 进 multipart 文本字段，`data.moderation` 回显。依据是给非法值回 400
+  `Invalid value: 'bogus'. Supported values are: 'auto' and 'low'.`——两个端点都收，而 2025-04-01-preview 官方参考页并未列出该字段（文档滞后于服务）。`low` 只放宽模型侧额外过滤，
+  Azure 内容安全层仍会拦并报 `ResponsibleAIPolicyViolation`，不是开关。
+- **参考图确认无法传 URL**，不改代码：`images/edits` 的 `image[]`/`image` 给字符串 → 400 `expected a file, but got a string instead`；`images/generations` 无参考图字段（逐个试
+  `image/images/image_url/image_urls/input_image(s)/reference_image(s)/ref_images/input_reference/init_image/condition_image` 全部 `Unknown parameter`）。classic 面与
+  `/openai/v1` 面行为逐字一致；`api-version=preview`/`2026-01-01-preview` 在 images 上是 404；`/openai/v1/responses` 与 `/openai/v1/chat/completions` 对 gpt-image-2 一律
+  `The requested operation is unsupported.`。要 URL 只能 CLI 侧先下载。
+- 探参数用「非法枚举值/错误类型」制造 400，零生成费用；但 **配额在校验之前就扣**（East US 2 实测连续 11 条 400 后第 12 条 429，5 次/分钟），批量探针要按 ~16s 间隔。

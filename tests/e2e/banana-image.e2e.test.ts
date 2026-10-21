@@ -25,11 +25,11 @@ describe("banana-image e2e", () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it("generations 默认 quality=high：b64 落盘、请求体契约正确、真实尺寸不符给警告", async () => {
+  it("generations 默认 quality=low：b64 落盘、请求体契约正确、真实尺寸不符给警告", async () => {
     const mock = await startMock(() => ({
       body: { data: [{ b64_json: REAL_PNG.toString("base64") }] },
     }));
-    const out = path.join(dir, "gen.png");
+    const out = path.join(dir, "gen.jpg");
     const run = await cli(
       ["--json", "banana-image-gen", "--prompt", "一只猫", "--output", out],
       bananaEnv(mock.endpoint),
@@ -38,12 +38,14 @@ describe("banana-image e2e", () => {
     expect(parseData(run)).toEqual({
       path: out,
       bytes: REAL_PNG.length,
+      // mock 回的是 PNG 字节：format 是 sharp 解出的真值，不跟随请求的 jpeg
       format: "png",
       size: "8x16",
       requestedSize: "1024x1024",
       model: "gpt-image-2",
-      quality: "high",
-      qualityDefault: "high",
+      quality: "low",
+      qualityDefault: "low",
+      moderation: "low",
     });
     expect(mock.requests).toHaveLength(1);
     expect(mock.requests[0].path).toBe("/v1/images/generations");
@@ -52,8 +54,9 @@ describe("banana-image e2e", () => {
       model: "gpt-image-2",
       prompt: "一只猫",
       size: "1024x1024",
-      quality: "high",
-      output_format: "png",
+      quality: "low",
+      moderation: "low",
+      output_format: "jpeg",
       n: 1,
     });
     const warnings = (JSON.parse(run.stdout) as { warnings: { code: string; plugin: string }[] })
@@ -96,7 +99,7 @@ describe("banana-image e2e", () => {
       size: "8x16",
       requestedSize: "auto",
       quality: "medium",
-      qualityDefault: "high",
+      qualityDefault: "low",
     });
     expect(mock.requests[0].path).toBe("/v1/images/edits");
     expect(mock.requests[0].headers["content-type"]).toMatch(/^multipart\/form-data; boundary=/);
@@ -112,6 +115,113 @@ describe("banana-image e2e", () => {
     // --size auto 不应因真实像素不同而报警
     const warnings = (JSON.parse(run.stdout) as { warnings: { code: string }[] }).warnings;
     expect(warnings.map((w) => w.code)).not.toContain("E_SIZE_MISMATCH");
+    await mock.close();
+  });
+
+  it("--ref 传 http(s) URL：改走 JSON images，URL 原样交给网关下载", async () => {
+    const mock = await startMock(() => ({
+      body: { data: [{ b64_json: REAL_PNG.toString("base64") }] },
+    }));
+    const out = path.join(dir, "url-refs.png");
+    const run = await cli(
+      [
+        "--json",
+        "banana-image-gen",
+        "--prompt",
+        "把 <Image 1> 放进 <Image 2> 的场景",
+        "--ref",
+        "https://cdn.example.com/a.png",
+        "https://cdn.example.com/b.jpg",
+        "--output",
+        out,
+      ],
+      bananaEnv(mock.endpoint),
+    );
+    expect(run.code).toBe(0);
+    expect(mock.requests[0].path).toBe("/v1/images/edits");
+    expect(mock.requests[0].headers["content-type"]).toBe("application/json");
+    expect(requestJson(mock)).toMatchObject({
+      model: "gpt-image-2",
+      images: ["https://cdn.example.com/a.png", "https://cdn.example.com/b.jpg"],
+      moderation: "low",
+    });
+    expect(requestJson(mock)).not.toHaveProperty("n");
+    await mock.close();
+  });
+
+  it("URL 与本地文件混传：本地内联 data URI，base64 绝不进 stdout", async () => {
+    const mock = await startMock(() => ({
+      body: { data: [{ b64_json: REAL_PNG.toString("base64") }] },
+    }));
+    const ref = path.join(dir, "local.png");
+    await writeFile(ref, REAL_PNG);
+    const out = path.join(dir, "mixed.png");
+    const run = await cli(
+      [
+        "--json",
+        "banana-image-gen",
+        "--prompt",
+        "x",
+        "--ref",
+        "https://cdn.example.com/a.png",
+        ref,
+        "--output",
+        out,
+      ],
+      bananaEnv(mock.endpoint),
+    );
+    expect(run.code).toBe(0);
+    const images = requestJson(mock).images as string[];
+    expect(images[0]).toBe("https://cdn.example.com/a.png");
+    expect(images[1]).toBe(`data:image/png;base64,${REAL_PNG.toString("base64")}`);
+    expect(run.stdout).not.toContain(REAL_PNG.toString("base64"));
+    await mock.close();
+  });
+
+  it("带 scheme 的非 http(s) 入参本地拒（网关会把它当 base64，报错误导排查）", async () => {
+    const mock = await startMock(() => ({
+      body: { data: [{ b64_json: REAL_PNG.toString("base64") }] },
+    }));
+    for (const value of ["file:///tmp/a.png", "data:image/png;base64,AAAA"]) {
+      const run = await cli(
+        ["--json", "banana-image-gen", "--prompt", "x", "--ref", value],
+        bananaEnv(mock.endpoint),
+      );
+      expect(run.code).toBe(2);
+      expect(parseError(run).code).toBe("E_INVALID_OPTION");
+      expect(parseError(run).message).toContain("--ref");
+    }
+    expect(mock.requests).toHaveLength(0);
+    await mock.close();
+  });
+
+  it("--moderation 覆盖 env 默认；非法值零请求", async () => {
+    const mock = await startMock(() => ({
+      body: { data: [{ b64_json: REAL_PNG.toString("base64") }] },
+    }));
+    const out = path.join(dir, "mod.png");
+    const ok = await cli(
+      ["--json", "banana-image-gen", "--prompt", "x", "--moderation", "auto", "--output", out],
+      bananaEnv(mock.endpoint),
+    );
+    expect(ok.code).toBe(0);
+    expect(parseData(ok)).toMatchObject({ moderation: "auto" });
+    expect(requestJson(mock, 0).moderation).toBe("auto");
+
+    const byEnv = await cli(
+      ["--json", "banana-image-gen", "--prompt", "x", "--output", out],
+      bananaEnv(mock.endpoint, { BANANA_IMAGE_MODERATION: "auto" }),
+    );
+    expect(byEnv.code).toBe(0);
+    expect(requestJson(mock, 1).moderation).toBe("auto");
+
+    const bad = await cli(
+      ["--json", "banana-image-gen", "--prompt", "x", "--moderation", "low-medium"],
+      bananaEnv(mock.endpoint),
+    );
+    expect(bad.code).toBe(2);
+    expect(parseError(bad).code).toBe("E_INVALID_OPTION");
+    expect(mock.requests).toHaveLength(2);
     await mock.close();
   });
 
@@ -204,9 +314,10 @@ describe("banana-image e2e", () => {
     expect(command?.source).toBe("plugin:banana-image");
     expect(command?.options?.map((option) => option.flags)).toEqual([
       "--prompt <text>",
-      "--ref <paths...>",
+      "--ref <urlsOrPaths...>",
       "--size <WxH|auto>",
       "--quality <q>",
+      "--moderation <m>",
       "--output <path>",
       "--model <id>",
     ]);

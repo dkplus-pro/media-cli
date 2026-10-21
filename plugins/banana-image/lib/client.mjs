@@ -19,8 +19,30 @@ function errorMessage(text) {
   return String(text ?? "").slice(0, 300);
 }
 
-function requestInit(config, { prompt, size, quality, refs }) {
-  if (refs.length > 0) {
+// edits 的参考图有两种形态（实测 2026-10-19）：multipart 的 `image[]` 二进制，以及
+// application/json 的 `images` 数组（元素可为 http(s) URL、data URI 或纯 base64，网关会下载/解码
+// 后转成 multipart 转发上游）。含 URL 就只能走 JSON；全本地仍走 multipart，不动既有已验证路径。
+function toImageParam(ref) {
+  return ref.kind === "url" ? ref.url : `data:${ref.mime};base64,${ref.data.toString("base64")}`;
+}
+
+function jsonBody(config, options) {
+  const { prompt, size, quality, moderation, refs } = options;
+  return {
+    model: config.model,
+    prompt,
+    size,
+    quality,
+    moderation,
+    output_format: config.outputFormat,
+    response_format: "b64_json",
+    ...(refs.length > 0 ? { images: refs.map(toImageParam) } : { n: 1 }),
+  };
+}
+
+function requestInit(config, options) {
+  const { prompt, size, quality, moderation, refs } = options;
+  if (refs.length > 0 && refs.every((ref) => ref.kind === "file")) {
     const form = new FormData();
     for (const ref of refs) {
       form.append("image[]", new Blob([ref.data], { type: ref.mime }), ref.name);
@@ -29,6 +51,7 @@ function requestInit(config, { prompt, size, quality, refs }) {
     form.append("prompt", prompt);
     form.append("size", size);
     form.append("quality", quality);
+    form.append("moderation", moderation);
     form.append("output_format", config.outputFormat);
     form.append("response_format", "b64_json");
     // content-type 由 fetch 自动生成（含 boundary），不得手工设置
@@ -37,15 +60,7 @@ function requestInit(config, { prompt, size, quality, refs }) {
   return {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      model: config.model,
-      prompt,
-      size,
-      quality,
-      output_format: config.outputFormat,
-      response_format: "b64_json",
-      n: 1,
-    }),
+    body: JSON.stringify(jsonBody(config, options)),
   };
 }
 
@@ -74,14 +89,12 @@ async function fetchImage(config, url) {
 export async function generateImage(config, options) {
   const action = options.refs.length > 0 ? "edits" : "generations";
   const url = `${config.baseUrl}/v1/images/${action}`;
+  const init = requestInit(config, options);
   let res;
   try {
     res = await fetch(url, {
-      ...requestInit(config, options),
-      headers: {
-        ...(options.refs.length > 0 ? {} : requestInit(config, options).headers),
-        authorization: `Bearer ${config.apiKey}`,
-      },
+      ...init,
+      headers: { ...(init.headers ?? {}), authorization: `Bearer ${config.apiKey}` },
       signal: AbortSignal.timeout(config.timeoutMs),
     });
   } catch (err) {

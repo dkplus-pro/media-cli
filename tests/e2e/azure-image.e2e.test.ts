@@ -17,7 +17,7 @@ interface CliRun {
   stderr: string;
 }
 
-async function cli(args: string[], env: Record<string, string> = {}): Promise<CliRun> {
+async function cli(args: string[], env: Record<string, string | undefined> = {}): Promise<CliRun> {
   try {
     const { stdout, stderr } = await execFileAsync(process.execPath, [BIN, ...args], {
       env: { ...process.env, ...env },
@@ -105,10 +105,18 @@ function failBody(status: number): MockReply {
   return { status, body: JSON.stringify({ error: { message: `mock-${status}` } }) };
 }
 
-function azureEnv(endpoint: string, keys: string): Record<string, string> {
+// 本机 ~/.zshrc 可能配了真 AZURE_IMAGE_* 默认值：新引入的 moderation 显式删除，
+// 否则「默认 low」这条契约会被环境改掉（helpers/cli.ts 里 undefined = 从环境删除）
+function azureEnv(
+  endpoint: string,
+  keys: string,
+  extra: Record<string, string | undefined> = {},
+): Record<string, string | undefined> {
   return {
     AZURE_IMAGE_KEY_POOL: keys,
     AZURE_IMAGE_ENDPOINT_POOL: Array(keys.split(",").length).fill(endpoint).join(","),
+    AZURE_IMAGE_MODERATION: undefined,
+    ...extra,
   };
 }
 
@@ -146,7 +154,7 @@ describe("azure-image e2e（本地 mock）", () => {
   it("纯文案 generations 成功：落盘、契约字段、请求体与 URL 均正确", async () => {
     const mock = await startMock((key) => okBody(`rp-${key}`));
     try {
-      const out = path.join(dir, "gen.png");
+      const out = path.join(dir, "gen.jpg");
       const r = await cli(["--json", "image-gen", "--prompt", "a red apple", "--output", out], {
         ...azureEnv(mock.endpoint, "secret-key-one"),
       });
@@ -163,7 +171,7 @@ describe("azure-image e2e（本地 mock）", () => {
         };
       };
       expect(parsed.ok).toBe(true);
-      expect(parsed.data.format).toBe("png");
+      expect(parsed.data.format).toBe("jpeg");
       expect(parsed.data.size).toBe("2880x2880"); // 默认档（media-29）；显式 --size 另有下面的用例守
       expect(parsed.data.bytes).toBe(PNG_BYTES.length);
       expect(parsed.data.account.index).toBe(0);
@@ -178,7 +186,8 @@ describe("azure-image e2e（本地 mock）", () => {
         prompt: "a red apple",
         size: "2880x2880",
         quality: "auto",
-        output_format: "png",
+        moderation: "low",
+        output_format: "jpeg",
         n: 1,
       });
     } finally {
@@ -195,7 +204,7 @@ describe("azure-image e2e（本地 mock）", () => {
       const REF_B = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 8, 7]);
       await writeFile(refA, REF_A);
       await writeFile(refB, REF_B);
-      const out = path.join(dir, "edit.png");
+      const out = path.join(dir, "edit.jpg");
       const r = await cli(
         ["--json", "image-gen", "--prompt", "with refs", "--ref", refA, refB, "--output", out],
         azureEnv(mock.endpoint, "secret-key-one"),
@@ -217,7 +226,59 @@ describe("azure-image e2e（本地 mock）", () => {
       expect(images[0].contentType).toBe("image/png");
       expect(images[1].contentType).toBe("image/jpeg");
       expect(parts.find((p) => p.name === "prompt")?.data.toString()).toBe("with refs");
-      expect(parts.find((p) => p.name === "output_format")?.data.toString()).toBe("png");
+      expect(parts.find((p) => p.name === "output_format")?.data.toString()).toBe("jpeg");
+      // moderation 也走 multipart 文本字段（实测该端点收这个参数）
+      expect(parts.find((p) => p.name === "moderation")?.data.toString()).toBe("low");
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("--moderation 覆盖与 env 默认：JSON 体与 data 同步；非法值零请求", async () => {
+    const mock = await startMock(() => okBody("mod"));
+    try {
+      const out = path.join(dir, "mod.png");
+      const r = await cli(
+        ["--json", "image-gen", "--prompt", "x", "--moderation", "auto", "--output", out],
+        azureEnv(mock.endpoint, "secret-key-one"),
+      );
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as { data: { moderation: string } };
+      expect(parsed.data.moderation).toBe("auto");
+      expect(JSON.parse(mock.requests[0].body.toString()).moderation).toBe("auto");
+
+      // env 默认档：不设 --moderation 时取 AZURE_IMAGE_MODERATION
+      const r2 = await cli(["--json", "image-gen", "--prompt", "y", "--output", out], {
+        ...azureEnv(mock.endpoint, "secret-key-one"),
+        AZURE_IMAGE_MODERATION: "auto",
+      });
+      expect(r2.code).toBe(0);
+      expect(JSON.parse(mock.requests[1].body.toString()).moderation).toBe("auto");
+    } finally {
+      await mock.close();
+    }
+  });
+
+  it("moderation 非法值：--moderation 报 E_INVALID_OPTION、env 报 E_CONFIG，且都零请求", async () => {
+    const mock = await startMock(() => okBody("never"));
+    try {
+      const r = await cli(
+        ["--json", "image-gen", "--prompt", "x", "--moderation", "medium"],
+        azureEnv(mock.endpoint, "secret-key-one"),
+      );
+      expect(r.code).toBe(2);
+      expect((JSON.parse(r.stdout) as { error: { code: string } }).error.code).toBe(
+        "E_INVALID_OPTION",
+      );
+
+      const r2 = await cli(["--json", "image-gen", "--prompt", "x"], {
+        ...azureEnv(mock.endpoint, "secret-key-one"),
+        AZURE_IMAGE_MODERATION: "high",
+      });
+      expect(r2.code).toBe(3);
+      expect((JSON.parse(r2.stdout) as { error: { code: string } }).error.code).toBe("E_CONFIG");
+
+      expect(mock.requests).toHaveLength(0);
     } finally {
       await mock.close();
     }

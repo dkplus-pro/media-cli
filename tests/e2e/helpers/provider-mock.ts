@@ -136,6 +136,7 @@ export function bananaEnv(
     BANANA_IMAGE_API_BASE: endpoint,
     BANANA_IMAGE_MODEL: undefined,
     BANANA_IMAGE_QUALITY: undefined,
+    BANANA_IMAGE_MODERATION: undefined,
     BANANA_IMAGE_OUTPUT_FORMAT: undefined,
     BANANA_IMAGE_TIMEOUT_MS: "5000",
     ...extra,

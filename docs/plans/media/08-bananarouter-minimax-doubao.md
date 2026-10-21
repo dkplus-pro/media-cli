@@ -6,7 +6,7 @@
 
 ## 1. 用户需求
 
-1. **BananaRouter `gpt-image-2`**：默认高质量（`quality=high`），配置 `BANANA_IMAGE_API_KEY`、`BANANA_IMAGE_API_BASE`。
+1. **BananaRouter `gpt-image-2`**：默认高质量（`quality=high`），配置 `BANANA_IMAGE_API_KEY`、`BANANA_IMAGE_API_BASE`。（2026-10-19 修订：用户改判默认 `low`，见 D36。）
 2. **MiniMax**：语音生成、音乐生成、视频生成。配置 `MINIMAX_API_KEY`、`MINIMAX_API_BASE_URL`（用户原文写作 `MINIMAX_API_BASR_URL`，按笔误处理，插件兼容两者）。
 3. **豆包**：接入图像模型 `doubao-seedream-4-5-251128`。
 4. 配置统一写入 `~/.zshrc`（仅本机，不进仓库）。
@@ -17,7 +17,7 @@
 
 - 该 token 的 `GET /v1/models` 只返回 `gpt-image-2`（按 token 逐模型授权）。
 - OpenAI Image API 兼容：`POST {base}/v1/images/generations`、`POST {base}/v1/images/edits`，Bearer 鉴权。
-- `quality` 支持 `auto|low|medium|high`；用户要求默认 `high`。
+- `quality` 支持 `auto|low|medium|high`；用户要求默认 `high`（2026-10-19 改为默认 `low`）。
 - `size` 支持 `auto` 或 `WxH`：每边 ≤3840、必须是 16 的倍数、长短边比 ≤3:1、总像素 655360–8294400；常用 `1024x1024`、`1536x1024`、`1024x1536`、`2048x2048`。
 - 成功响应 `{ data: [{ b64_json, revised_prompt? }] }`；可显式传 `response_format: "b64_json"`。
 - edits 支持 multipart `image[]`（本地文件）或 JSON `images`（URL/base64）；本插件只走 multipart 本地文件。
@@ -36,6 +36,7 @@
   - 轮询 `GET /v2/query/video_generation/{task_id}`：`status` 为 `queued|running|succeeded|failed|cancelled`；成功取 `task.content.url` 下载，失败取 `task.error.{code,message}`。
   - H3：`resolution=768P|2K`、`duration=4..15`；H3-Max：`480P|768P`、`duration=5..15`。纯文生视频 `ratio` 不能是 `adaptive`，枚举 `21:9|16:9|4:3|1:1|3:4|9:16`。
   - 实测 H3 5s/768P/16:9 约 118s 出片，成片自带音轨；默认超时 900000ms。
+- **视频再生** `POST /v2/video_regeneration`（官方文档 2026-10-19）：把 H3 产出的 **768P** 成片升 **2K**，入参二选一——`{ model, source_task_id, resolution:"2K" }`（按已有 768P 成功任务，须当前账号、7 天内、`status=succeeded`）或 `{ model, content:[{type:"text",text}], ... , resolution:"2K" }`（`content` 里恰好一个 `role=base_video` 的 `video_url`，须配非空 `text`）。`resolution` 必填且当前**只支持 2K**；`ratio`/`duration` 跟随源视频、不传。再生任务 `task_type=regeneration`，走**同一套** query/list/cancel 端点。**不是通用超分**：源视频须是本模型 768P 成片，外部视频会被拒。官方请求体示例的 `model` 为 `MiniMax-H3`（部分第三方网关名为 `MiniMax-H3-Regeneration`）。
 - 错误一律先看 HTTP 状态，再看 `base_resp.status_code`（音频侧）/ `task.error`（视频侧）：1004/2049 → key 无效（`E_CONFIG`）；1008 余额不足；1002/1039 限流；2013 参数异常。
 
 ### 豆包 Ark
@@ -51,7 +52,7 @@
 | # | 决策 | 理由 |
 |---|---|---|
 | D35 | 新插件 `plugins/banana-image/`，命令 `banana-image-gen` | 与 `azure-image`/`modelscope-image` 同构；命令前缀避免与默认 `image-gen` 冲突 |
-| D36 | `banana-image-gen` 默认 `--quality high`、`--size 1024x1024`、`--output ./banana-<时间戳>.png`；`--ref` 只收本地 jpg/jpeg/png/webp，走 multipart edits；`--size auto` 合法 | 用户指定默认高质量；1024² 是最快最便宜的可预测档；参考图能力与 Azure 版对齐 |
+| D36 | `banana-image-gen` 默认 `--quality low`（2026-10-19 修订，原 `high`）、`--size 1024x1024`、`--output ./banana-<时间戳>.jpeg`；`--ref` 只收本地 jpg/jpeg/png/webp，走 multipart edits；`--size auto` 合法 | 1024² 是最快最便宜的可预测档；参考图能力与 Azure 版对齐；默认 jpeg 是因为 2880² 档 PNG 实测 12–17MB、JPEG 1.3–2.4MB（6–9 倍），用户指定；quality 改 low 是实测（2 组同 prompt/同尺寸对照）low 与 high 的字节数差 ≤1.6 倍且方向不稳定、耗时也不省（158.8s vs 165.4s），高质量档买不到可验证的收益 |
 | D37 | 尺寸本地预检（≤3840、16 倍数、比例 ≤3:1、总像素范围），超限 `E_INVALID_OPTION` 且不发网络 | 网关对非法 size 会静默降级成 2880x2880，必须客户端拦截 |
 | D38 | 新插件 `plugins/minimax/`，三命令 `minimax-speech` / `minimax-music` / `minimax-video` | 共用 config/client/错误摊平；按模态拆分 lib，单文件 <300 行 |
 | D39 | `MINIMAX_API_BASE_URL` 为主名；同时接受用户原文的 `MINIMAX_API_BASR_URL`（前者优先）。base 末尾 `/v1` 自动归一 | 兼容用户已写/将写的变量名；客户端统一拼 `/v1` 与 `/v2` |
@@ -60,6 +61,7 @@
 | D42 | 豆包生图作为既有 `plugins/doubao/` 的新命令 `doubao-image-gen`，默认模型 `doubao-seedream-4-5-251128`，默认 `2048x2048`、不加水印 | 复用 DOUBAO_API_KEY/BASE_URL；型号写死符合用户点名要求，仍可用 `--model`/`DOUBAO_IMAGE_MODEL` 覆盖 |
 | D43 | 三家全部只复用既有错误码 `E_CONFIG` / `E_PROVIDER_ERROR` / `E_MISSING_ARGUMENT` / `E_INVALID_OPTION`，不新增错误码、不改 `src/` | 架构约束；错误细节放 `details.{source,status,baseRespCode,...}` |
 | D44 | 测试全部走本地 mock（不依赖真实 key/外网），真机冒烟另做且每项只跑最小档 | 既有 e2e 契约；避免 CI 扣费 |
+| D45 | 新增 `minimax-video-regen`（同一 `plugins/minimax/` 插件）：`--source-task-id` / `--base-video` 二选一，`resolution` 固定 `2K`，模型默认 `MiniMax-H3`（env `MINIMAX_VIDEO_REGEN_MODEL`、`--model` 可覆盖为网关名 `MiniMax-H3-Regeneration`）；把生成/再生共用的「提交→轮询→下载」抽到 `lib/video-task.mjs` | 用户点名要接 H3 再生；两种入参是官方二选一契约（`source_task_id` 自动回填、`base_video` 需 `--prompt`），不做局部下采样以避免猜 provider；生命周期抽共用件，避免两份轮询/下载逻辑漂移 |
 
 ## 4. 命令契约
 
@@ -70,8 +72,8 @@
 | `--prompt <text>` | 必填 | 生图/编辑文案 |
 | `--ref <paths...>` | — | 本地参考图（jpg/jpeg/png/webp），走 `/v1/images/edits` |
 | `--size <WxH\|auto>` | `1024x1024` | 满足 BananaRouter 尺寸约束 |
-| `--quality <q>` | `high`（env 可改） | `auto\|low\|medium\|high` |
-| `--output <path>` | `./banana-<ISO>.png` | 输出路径 |
+| `--quality <q>` | `low`（env 可改） | `auto\|low\|medium\|high` |
+| `--output <path>` | `./banana-<ISO>.jpeg` | 输出路径（扩展名默认跟随 `BANANA_IMAGE_OUTPUT_FORMAT`） |
 | `--model <id>` | `gpt-image-2` | env `BANANA_IMAGE_MODEL` 可覆盖 |
 
 data：`{ path, bytes, format, size, requestedSize, model, quality, qualityDefault, revisedPrompt?, sourceUrl? }`。
@@ -133,6 +135,22 @@ data：`{ path, bytes, model, taskId, durationSec, resolution, ratio, createdAt?
 
 data：`{ path, bytes, model, size, requestedSize, sourceUrl, usage? }`；真实像素用 sharp 解码。
 
+### 4.6 `minimax-video-regen`
+
+| 选项 | 默认 | 说明 |
+|---|---|---|
+| `--source-task-id <id>` | 二选一 | 按已有 768P 任务 ID 再生；服务端自动回填 prompt/素材 |
+| `--base-video <pathOrUrl>` | 二选一 | 按 768P 源视频再生；本地 mp4/mov 读成 data URI 内联，也可 http(s) / `mm_file://`；须配 `--prompt` |
+| `--prompt <text>` | `--base-video` 模式必填 | 再生 text 项，≤7000 字符；`--source-task-id` 模式不许传 |
+| `--aigc-watermark` | 关 | 给 2K 成片加 AIGC 标识 |
+| `--model <id>` | `MiniMax-H3` | env `MINIMAX_VIDEO_REGEN_MODEL`；部分网关用 `MiniMax-H3-Regeneration` |
+| `--poll-interval <ms>` | `5000` | 轮询间隔 |
+| `--timeout <ms>` | `900000` | 提交+轮询+下载总预算 |
+| `--output <path>` | `./minimax-video-regen-<ISO>.mp4` | |
+
+data：`{ path, bytes, model, method:"source_task_id"|"base_video", taskId, resolution:"2K", sourceTaskId?, baseVideo?, createdAt?, updatedAt?, usage? }`。
+`resolution` 固定 `2K`（provider 当前仅此一档）；`--base-video` 的本地文件只回字节摘要，base64 不进 stdout。
+
 ## 5. 文件清单
 
 ```
@@ -145,14 +163,18 @@ plugins/banana-image/
   lib/run.mjs            # handler：校验→请求→写盘→真实像素
 
 plugins/minimax/
-  index.mjs              # manifest：speech / music / video
+  index.mjs              # manifest：speech / music / video / video-regen
   lib/config.mjs         # env、base 归一、命令默认值
   lib/errors.mjs         # cliError
   lib/client.mjs         # POST/GET、timeout、HTTP 与 base_resp 映射
   lib/audio.mjs          # hex/URL → Buffer、写文件
   lib/speech.mjs         # minimax-speech handler + body
   lib/music.mjs          # minimax-music handler + body
-  lib/video.mjs          # minimax-video handler + body + 轮询
+  lib/video-params.mjs   # minimax-video 参数解析与请求体
+  lib/video-media.mjs    # 多模态媒体解析与本地预检（含 --base-video）
+  lib/video-task.mjs     # 生成/再生共用的任务生命周期（提交→轮询→下载）
+  lib/video.mjs          # minimax-video handler
+  lib/video-regen.mjs    # minimax-video-regen 参数/请求体/handler
 
 plugins/doubao/
   lib/image.mjs          # doubao-image-gen handler + body + size 校验
@@ -165,6 +187,7 @@ tests/e2e/helpers/provider-mock.ts
 tests/e2e/banana-image.e2e.test.ts
 tests/e2e/minimax-speech-music.e2e.test.ts
 tests/e2e/minimax-video.e2e.test.ts
+tests/e2e/minimax-video-regen.e2e.test.ts
 tests/e2e/doubao-image.e2e.test.ts
 ```
 
@@ -181,9 +204,10 @@ tests/e2e/doubao-image.e2e.test.ts
 
 ### e2e（本地 mock，真 spawn dist）
 
-- Banana：generations 成功 b64 落盘 + 请求体默认 quality=high；edits multipart 带参考图；非法 size 零请求；401 → `E_CONFIG`；假 PNG → 真实尺寸/`E_SIZE_MISMATCH`。
+- Banana：generations 成功 b64 落盘 + 请求体默认 quality=low；edits multipart 带参考图；非法 size 零请求；401 → `E_CONFIG`；假 PNG → 真实尺寸/`E_SIZE_MISMATCH`。
 - MiniMax speech/music：hex 落盘、请求体不含 `audio_setting`、base_resp 1004 → `E_CONFIG`、1008 → `E_PROVIDER_ERROR`、歌词校验零请求。
 - MiniMax video：提交 → running → succeeded → 下载 mp4；failed → `E_PROVIDER_ERROR` 带 task.error；参数校验零请求。
+- MiniMax video-regen：`--source-task-id` 体只带 `{model,resolution:"2K",source_task_id}`；`--base-video` 体为 `content:[text, role=base_video]`；failed → `E_PROVIDER_ERROR`；缺失/互斥/超长/未知 scheme 零请求；spec 列出全部选项。
 - 豆包生图：返回 URL → 下载落盘；默认模型/尺寸/watermark；1024x1024 本地拒绝零请求。
 - 所有新 e2e 文件 `vi.setConfig({ testTimeout: 30_000 })`（media-27 的教训）。
 
@@ -193,11 +217,11 @@ tests/e2e/doubao-image.e2e.test.ts
 pnpm lint
 pnpm build
 pnpm test
-node dist/media-cli.js --json spec | grep -E 'banana-image-gen|minimax-(speech|music|video)|doubao-image-gen'
+node dist/media-cli.js --json spec | grep -E 'banana-image-gen|minimax-(speech|music|video|video-regen)|doubao-image-gen'
 ```
 
 - 上述命令全绿；新命令 `--json` 成功/失败包络符合壳契约。
-- `spec` 能列出 5 个新命令，source 为对应 `plugin:<name>`。
+- `spec` 能列出 6 个新命令，source 为对应 `plugin:<name>`。
 - e2e 不依赖真实 key；任何输出不包含 key 原文。
 - 真机冒烟（需用户确认后执行，均为最小计费档）：
   - `banana-image-gen --prompt ... --size 1024x1024 --quality high`
@@ -212,3 +236,12 @@ node dist/media-cli.js --json spec | grep -E 'banana-image-gen|minimax-(speech|m
 - 不写交互式 prompt，不写 stdout/stderr（只用 `ctx.logger` 与 return/throw）。
 - 不在仓库内写入任何真实 key；`.zshrc` 只在用户本机追加。
 - 不把 MiniMax `audio_setting` 作为默认字段发送。
+
+## 增补（media-33，2026-10-19 实测）
+
+- `banana-image-gen` 新增 `--moderation`（env `BANANA_IMAGE_MODERATION`，默认 `low`，枚举 `auto|low`；网关原文 `moderation must be one of: auto, low`），JSON 与 multipart 两条路径都带。
+- `--ref` 改为**本地路径与 http(s) URL 混传**：全本地仍走 multipart `image[]`（不动既有已验证路径）；一旦含 URL 就整体改走 `application/json` 的 `images` 数组，本地文件内联成
+  `data:<mime>;base64,`，URL 交给网关下载（单图 ≤20MB、超时 30s、单请求内 ≤5 并发、私有/保留 IP 被 SSRF 拒、允许 jpeg/png/gif/webp/bmp）。实测 URL / data URI / 纯 base64 /
+  `{"image_url":…}` 四种元素形态都被真消费（给不可解析域名回 `failed to download 1 image(s): …`）。
+- 带 scheme 的非 http(s) 入参本地即拒（`E_INVALID_OPTION`，零请求）：网关对这类字符串不走协议分支而当 base64 解码，`file:///…` 报 `illegal base64 data`，错误信息会把排查引错方向。
+- 顺序坑：**参考图下载先于参数枚举校验**，所以探 edits 的枚举参数探不出来，要用 generations 探。`mask` 文档写「暂未支持」，但网关确实会去下载 `mask` URL——下载不等于转发上游生效，未判死。

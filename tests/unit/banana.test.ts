@@ -35,19 +35,20 @@ describe("banana-image 配置", () => {
     expect(err.details?.var).toBe("BANANA_IMAGE_API_KEY");
   });
 
-  it("默认 quality=high、model=gpt-image-2、png、300s 超时", () => {
+  it("默认 quality=low、moderation=low、model=gpt-image-2、jpeg、300s 超时", () => {
     const config = loadConfig({ BANANA_IMAGE_API_KEY: "k" });
     expect(config).toMatchObject({
       apiKey: "k",
       baseUrl: "https://api.bananarouter.com",
       model: "gpt-image-2",
-      quality: "high",
-      outputFormat: "png",
+      quality: "low",
+      moderation: "low",
+      outputFormat: "jpeg",
       timeoutMs: 300_000,
     });
   });
 
-  it("quality/output_format/timeout 白名单与正整数校验", () => {
+  it("quality/output_format/moderation/timeout 白名单与正整数校验", () => {
     expect(
       coded(() => loadConfig({ BANANA_IMAGE_API_KEY: "k", BANANA_IMAGE_QUALITY: "ultra" })).code,
     ).toBe("E_CONFIG");
@@ -55,6 +56,13 @@ describe("banana-image 配置", () => {
       coded(() => loadConfig({ BANANA_IMAGE_API_KEY: "k", BANANA_IMAGE_OUTPUT_FORMAT: "gif" }))
         .code,
     ).toBe("E_CONFIG");
+    // 实测网关枚举只有 auto|low（"moderation must be one of: auto, low"）
+    expect(
+      coded(() => loadConfig({ BANANA_IMAGE_API_KEY: "k", BANANA_IMAGE_MODERATION: "high" })).code,
+    ).toBe("E_CONFIG");
+    expect(
+      loadConfig({ BANANA_IMAGE_API_KEY: "k", BANANA_IMAGE_MODERATION: "auto" }).moderation,
+    ).toBe("auto");
     expect(
       coded(() => loadConfig({ BANANA_IMAGE_API_KEY: "k", BANANA_IMAGE_TIMEOUT_MS: "0" })).code,
     ).toBe("E_CONFIG");

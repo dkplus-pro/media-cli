@@ -88,11 +88,12 @@ data：`{ "path": string, "durationSec": number, "segments": number, "language":
 |---|---|---|
 | `--prompt <text>` | 必填 | 文案 |
 | `--ref <paths...>` | 无 | 参考图（可多个）；走 edits 端点 |
-| `--size <WxH>` | 1024x1024 | 如 1536x1024 |
-| `--output <path>` | `./generated-<ts>.png` | 输出图片 |
+| `--size <WxH>` | 2880x2880 | 如 1536x1024（media-29 起默认 2880²，实测约 61s，1024² 约 21s） |
+| `--output <path>` | `./generated-<ts>.jpeg` | 输出图片（扩展名由调用方写死，不跟随格式） |
 | `--quality <q>` | `AZURE_IMAGE_QUALITY` | 覆盖默认质量 |
+| `--moderation <m>` | `AZURE_IMAGE_MODERATION`（默认 `low`） | 枚举 `auto\|low`；只放宽模型侧额外过滤，Azure 内容安全层仍拦 |
 
-data：`{ "path": string, "bytes": number, "format": string, "size": string, "revisedPrompt"?: string, "account": { "index": number, "endpoint": string } }`（endpoint 不含 key）
+data：`{ "path": string, "bytes": number, "format": string, "size": string, "moderation": string, "revisedPrompt"?: string, "account": { "index": number, "endpoint": string } }`（endpoint 不含 key）
 
 ### 3.3 suno-music（open.suno.cn 任务制 API）
 
@@ -135,6 +136,7 @@ data：`{ "path": string, "bytes": number, "format": string, "size": string, "re
 | azure-image | `AZURE_IMAGE_DEPLOYMENT` | 否 | `gpt-image-2` | 部署名 |
 | azure-image | `AZURE_IMAGE_OUTPUT_FORMAT` | 否 | `png` | png/jpeg/webp |
 | azure-image | `AZURE_IMAGE_QUALITY` | 否 | `auto` | auto/low/medium/high |
+| azure-image | `AZURE_IMAGE_MODERATION` | 否 | `low` | `auto\|low`（实测服务端收该字段，2025-04-01-preview 参考页未列） |
 | azure-image | `AZURE_IMAGE_API_VERSION` | 否 | `2025-04-01-preview` | gpt-image-2 若要求更新版本，设此 env 即可 |
 | suno-music | `SUNO_API_KEY` | 是 | — | Bearer token |
 | suno-music | `SUNO_BASE_URL` | 否 | `https://open.suno.cn` | mock 测试入口 |
@@ -148,7 +150,8 @@ data：`{ "path": string, "bytes": number, "format": string, "size": string, "re
 | banana-image | `BANANA_IMAGE_API_KEY` | 是 | — | BananaRouter Bearer key；无效（401/403）→ `E_CONFIG` |
 | banana-image | `BANANA_IMAGE_API_BASE` | 否 | `https://api.bananarouter.com` | 末尾 `/v1` 自动归一；mock 测试入口 |
 | banana-image | `BANANA_IMAGE_MODEL` | 否 | `gpt-image-2` | 该 token 按模型授权，换模型需先在控制台开通 |
-| banana-image | `BANANA_IMAGE_QUALITY` | 否 | `high` | auto/low/medium/high |
+| banana-image | `BANANA_IMAGE_QUALITY` | 否 | `low` | auto/low/medium/high |
+| banana-image | `BANANA_IMAGE_MODERATION` | 否 | `low` | `auto\|low`（网关原文 `moderation must be one of: auto, low`） |
 | banana-image | `BANANA_IMAGE_OUTPUT_FORMAT` | 否 | `png` | png/jpeg/webp |
 | banana-image | `BANANA_IMAGE_TIMEOUT_MS` | 否 | `300000` | 单次请求超时；实测延迟 65–159s 抖动大 |
 | minimax | `MINIMAX_API_KEY` | 是 | — | Bearer JWT；1004/2049 与 HTTP 401/403 → `E_CONFIG` |
@@ -156,6 +159,7 @@ data：`{ "path": string, "bytes": number, "format": string, "size": string, "re
 | minimax | `MINIMAX_SPEECH_MODEL` | 否 | `speech-2.8-hd` | `minimax-speech` 型号；`--model` 优先 |
 | minimax | `MINIMAX_MUSIC_MODEL` | 否 | `music-3.0` | `minimax-music` 型号；`--model` 优先 |
 | minimax | `MINIMAX_VIDEO_MODEL` | 否 | `MiniMax-H3` | `minimax-video` 型号；仅支持 H3/H3-Max；`--model` 优先 |
+| minimax | `MINIMAX_VIDEO_REGEN_MODEL` | 否 | `MiniMax-H3` | `minimax-video-regen` 型号；官方为 `MiniMax-H3`，部分网关为 `MiniMax-H3-Regeneration`；`--model` 优先 |
 
 ## 5. 错误码增量（阶段 01 登记 `src/core/errors.ts`，同步壳 00-master-plan §4.4）
 

@@ -143,20 +143,25 @@ node dist/media-cli.js --json doubao-image-gen --prompt "合成一张" --ref a.p
 ```bash
 export AZURE_IMAGE_KEY_POOL="key1,key2"
 export AZURE_IMAGE_ENDPOINT_POOL="https://res-a.cognitiveservices.azure.com,https://res-b.cognitiveservices.azure.com"
-node dist/media-cli.js --json image-gen --prompt "一只红苹果" --output apple.png          # 纯文案，默认 2880x2880（约 61s）
-node dist/media-cli.js --json image-gen --prompt "一只红苹果" --size 1024x1024 --output small.png  # 快档约 21s
-node dist/media-cli.js --json image-gen --prompt "改成水彩风" --ref apple.png --output wc.png   # 参考图（edits）
+node dist/media-cli.js --json image-gen --prompt "一只红苹果" --output apple.jpg          # 纯文案，默认 2880x2880 + jpeg（约 61s）
+node dist/media-cli.js --json image-gen --prompt "一只红苹果" --size 1024x1024 --output small.jpg  # 快档约 21s
+node dist/media-cli.js --json image-gen --prompt "改成水彩风" --ref apple.jpg --output wc.jpg   # 参考图（edits）
 ```
 
 | 环境变量 | 默认 | 说明 |
 |---|---|---|
 | `AZURE_IMAGE_KEY_POOL` / `AZURE_IMAGE_ENDPOINT_POOL` | 必填 | 英文逗号分隔，**按索引一一配对**，长度不等报 `E_CONFIG` |
 | `AZURE_IMAGE_DEPLOYMENT` | `gpt-image-2` | 部署名 |
-| `AZURE_IMAGE_OUTPUT_FORMAT` | `png` | png/jpeg/webp |
+| `AZURE_IMAGE_OUTPUT_FORMAT` | `jpeg` | png/jpeg/webp（`jpeg` 比 `png` 小 6–9 倍，实测 2880² PNG 12–15MB / JPEG 1.3–2.4MB） |
 | `AZURE_IMAGE_QUALITY` | `auto` | auto/low/medium/high |
+| `AZURE_IMAGE_MODERATION` | `low` | auto/low（2026-10-19 由实测确认服务端收该字段，官方参考页未列） |
 | `AZURE_IMAGE_API_VERSION` | `2025-04-01-preview` | gpt-image-2 若要求更新版本，设此变量即可 |
 
 调度策略：每次请求随机选一个账号发起，401/403/429/5xx 自动轮换下一账号重试，全池失败报 `E_PROVIDER_ERROR`；400 类参数错误不轮换。任何输出都不含 key。
+
+`data.format` 与 `data.size` 是**请求值回显**（不像 `banana-image-gen` 用 sharp 解真实字节），所以 Azure 侧若换格式或调尺寸，JSON 里看不出来，要自己复核。`--output` 的扩展名由你写死、插件不跟随 `AZURE_IMAGE_OUTPUT_FORMAT` 改名——传 `--output a.png` 而格式是 jpeg 时，落的是 JPEG 字节配 `.png` 名。
+
+`--moderation`（默认 `low`）**只放宽模型侧的额外过滤**，Azure 的内容安全层仍然生效，被拦时报 `ResponsibleAIPolicyViolation`，不是关阀开关。参考图**只能给本地文件**：`images/edits` 的 `image[]` 收到字符串会 400 `expected a file, but got a string instead`，而 `images/generations` 根本没有参考图字段（11 个候选名全部 `Unknown parameter`）——想传 URL 只能自己先下载到本地，这是 provider 限制，不是本仓库的实现选择。配额在校验之前就扣，密集试参数会先撞 429（East US 2 实测 5 次/分钟）。
 
 ### banana-image（BananaRouter gpt-image-2 生图/改图）
 
@@ -164,8 +169,9 @@ node dist/media-cli.js --json image-gen --prompt "改成水彩风" --ref apple.p
 # ~/.zshrc
 export BANANA_IMAGE_API_KEY="sk-xxxxxxxx"                      # BananaRouter 令牌（按 token 逐模型授权）
 export BANANA_IMAGE_API_BASE="https://api.bananarouter.com"   # 末尾误填的 /v1 与斜杠会自动剥掉
-node dist/media-cli.js --json banana-image-gen --prompt "一只红苹果" --output apple.png   # 默认 quality=high、1024x1024
-node dist/media-cli.js --json banana-image-gen --prompt "改成水彩风" --ref apple.png --output wc.png
+node dist/media-cli.js --json banana-image-gen --prompt "一只红苹果" --output apple.jpg   # 默认 quality=low、1024x1024、jpeg
+node dist/media-cli.js --json banana-image-gen --prompt "改成水彩风" --ref apple.jpg --output wc.jpg
+node dist/media-cli.js --json banana-image-gen --prompt "把人物放进这个场景" --ref https://cdn.example.com/a.png local-bg.png --output mix.jpg   # URL 与本地混传
 node dist/media-cli.js --json banana-image-gen --prompt "电影海报" --size 1536x1024 --quality medium
 node dist/media-cli.js --json banana-image-gen --prompt "让模型自己选尺寸" --size auto
 ```
@@ -175,11 +181,14 @@ node dist/media-cli.js --json banana-image-gen --prompt "让模型自己选尺�
 | `BANANA_IMAGE_API_KEY` | 必填 | Bearer token；缺失或 401/403 → `E_CONFIG`（`details.var` 指明变量） |
 | `BANANA_IMAGE_API_BASE` | `https://api.bananarouter.com` | mock 测试入口；末尾 `/v1` 自动归一 |
 | `BANANA_IMAGE_MODEL` | `gpt-image-2` | 该 token 只授权已开通的模型；换模型先在控制台开通 |
-| `BANANA_IMAGE_QUALITY` | `high` | `auto`/`low`/`medium`/`high`；用户要求默认高质量 |
-| `BANANA_IMAGE_OUTPUT_FORMAT` | `png` | `png`/`jpeg`/`webp` |
+| `BANANA_IMAGE_QUALITY` | `low` | `auto`/`low`/`medium`/`high`；2026-10-19 由 `high` 改为 `low`（实测 quality 档对体积与耗时均无稳定代价，见下） |
+| `BANANA_IMAGE_MODERATION` | `low` | `auto`/`low`（网关原文 `moderation must be one of: auto, low`） |
+| `BANANA_IMAGE_OUTPUT_FORMAT` | `jpeg` | `png`/`jpeg`/`webp`；**网关可能静默忽略**（见下） |
 | `BANANA_IMAGE_TIMEOUT_MS` | `300000` | 单次请求超时；实测延迟 65–159s 抖动大 |
 
-尺寸规则（实测文档，2026-10-18）：每边 ≤3840、必须是 16 的倍数、长短边比 ≤3:1、总像素 655360–8294400；`--size auto` 合法，默认 `1024x1024`。**网关对非法尺寸不报错而是静默降级成 2880x2880**，所以插件在本地预检并报 `E_INVALID_OPTION`（不发请求）。`--ref` 只收本地 `jpg/jpeg/png/webp`，走 multipart `/v1/images/edits`；传了参考图就不要再传公网 URL。`data.size` 是 sharp 解出的真实像素，与请求值不一致时附 `E_SIZE_MISMATCH` 警告（`--size auto` 不比对）。
+尺寸规则（实测文档，2026-10-18）：每边 ≤3840、必须是 16 的倍数、长短边比 ≤3:1、总像素 655360–8294400；`--size auto` 合法，默认 `1024x1024`。**网关对非法尺寸不报错而是静默降级成 2880x2880**，所以插件在本地预检并报 `E_INVALID_OPTION`（不发请求）。`--ref` 支持多图，本地路径与 `http(s)` URL **可混传**：全本地时走 multipart `image[]`（仅 `jpg/jpeg/png/webp`），一旦含 URL 就整体改走 `application/json` 的 `images` 数组、本地文件内联成 `data:<mime>;base64,`，URL 由网关下载（单图 ≤20MB、下载超时 30s、私有/保留 IP 被 SSRF 拦、允许 jpeg/png/gif/webp/bmp）。带 scheme 的非 http(s) 入参在本地就被拒——网关对这类字符串不做协议分支，而是当 base64 解码，报 `illegal base64 data` 把人引错方向。`data.size` 是 sharp 解出的真实像素，与请求值不一致时附 `E_SIZE_MISMATCH` 警告（`--size auto` 不比对）。
+
+`output_format` 同样会被**静默忽略**（2026-10-18 实测，单样本）：同一 prompt、`2880x2880`、请求 `jpeg`，`quality=low` 那次回的是 **PNG**（12.35MB），`quality=high` 那次才是 JPEG（2.25MB）；两次都 HTTP 200、`size` 照实回、没有任何警告。唯一可信的判据是 `data.format`（sharp 解出的真格式）与 `data.bytes`。体积口径也一并实测过：2880² 同图 PNG 是 JPEG 的 **6–9 倍**（12–15MB vs 1.3–2.4MB），`quality` 档对体积基本不参与换算。
 
 ### modelscope-image（ModelScope API-Inference 生图/改图，Qwen-Image 系列：gen / fast / edit 三条命令）
 
@@ -306,7 +315,7 @@ node dist/media-cli.js --json agnes-video --prompt "先占个额度" --no-wait  
 
 > ⚠️ **`agnes-video` 的出片行为待实测。** 已实测的是**提交与校验侧**：三种 `--mode`（`text`/`keyframe`/`reference`）的本地校验全部生效，`seconds` 在 provider 侧是 **JSON 字符串**（插件已自动转换，取值 4–12，默认 5），`size` **只接受 `720P`**（其他值本地即拒，provider 直接 400），`images` ≤5、`audios` ≤3，且素材**只收公网 URL**（本地路径报 `E_INVALID_OPTION` 并提示先跑 `tencent-cos-upload`）。**未实测**：一条真实视频都没生成成功过——探测期间视频通道对连续 18 次间隔提交（跨 22 分钟）全部返回 503 `video_queue_full`，更早一个窗口连续 66 分钟同样，而同一把 key 约 94s 后图片通道仍是 HTTP 200（所以是通道容量，不是账号或额度）。因此**视频的时长、`status` 生命周期、轮询路由一律按未知处理**：两条候选轮询路由只用假 id 探过（`/agnesapi?video_id=` → 404 `task not found`，`/v1/videos/{id}` → 400 `task_not_exist`；`/v1/tasks/{id}` 不存在）。另外实测到约 20s 内连发 3 次提交会撞免费档 429、约 3.5 分钟自愈，**批量提交请把间隔拉到 ≥75s**。prompt 长度上限同样待实测，所以未做本地预检。
 
-### minimax（MiniMax 语音合成 / 音乐生成 / 文生视频）
+### minimax（MiniMax 语音合成 / 音乐生成 / 文生视频 / 视频再生 2K）
 
 ```bash
 # ~/.zshrc
@@ -317,6 +326,10 @@ node dist/media-cli.js --json minimax-speech --text "旁白" --voice male-qn-qin
 node dist/media-cli.js --json minimax-music --prompt "温暖治愈的钢琴曲" --instrumental --output bgm.mp3
 node dist/media-cli.js --json minimax-music --prompt "流行摇滚" --lyrics "第一句\n第二句" --output song.mp3
 node dist/media-cli.js --json minimax-video --prompt "海边日落，镜头缓慢推进" --duration 5 --resolution 768P --ratio 16:9
+node dist/media-cli.js --json minimax-video --prompt "让她转头微笑，微风吹动发丝" --first-frame portrait.png   # 图生视频（本地文件直接内联）
+node dist/media-cli.js --json minimax-video --prompt "<Picture 1> 按 <Video 1> 的舞步" --ref-image c.png --ref-video https://cdn/m.mp4   # 多模态参考
+node dist/media-cli.js --json minimax-video-regen --source-task-id 424010985738629                                          # 把已有 768P 任务升 2K
+node dist/media-cli.js --json minimax-video-regen --base-video h3-768p.mp4 --prompt "升到 2K"                               # 按源视频再生（本地文件直接内联）
 ```
 
 | 环境变量 | 默认 | 说明 |
@@ -326,6 +339,7 @@ node dist/media-cli.js --json minimax-video --prompt "海边日落，镜头缓�
 | `MINIMAX_SPEECH_MODEL` | `speech-2.8-hd` | `minimax-speech` 型号，`--model` 优先 |
 | `MINIMAX_MUSIC_MODEL` | `music-3.0` | `minimax-music` 型号，`--model` 优先 |
 | `MINIMAX_VIDEO_MODEL` | `MiniMax-H3` | `minimax-video` 型号；仅支持 `MiniMax-H3` / `MiniMax-H3-Max`，`--model` 优先 |
+| `MINIMAX_VIDEO_REGEN_MODEL` | `MiniMax-H3` | `minimax-video-regen` 型号；官方为 `MiniMax-H3`，部分网关为 `MiniMax-H3-Regeneration`，`--model` 优先 |
 
 三条命令的产物都是**同步落盘**：语音/音乐返回 hex 音频（也兼容 URL 下载），视频是提交 + 轮询 + 下载。
 
@@ -333,7 +347,16 @@ node dist/media-cli.js --json minimax-video --prompt "海边日落，镜头缓�
 
 `minimax-music`：`--instrumental` 纯音乐模式必须给 `--prompt`（风格/情绪）；非纯音乐必须给 `--lyrics` 或 `--lyrics-optimizer`（由 prompt 自动生成歌词）。prompt ≤2000 字符、lyrics ≤3500 字符。同步接口，全曲响应体可达约 10MB，`--timeout` 默认 600000ms。
 
-`minimax-video`：只做文生视频（H3/H3-Max）。默认 `MiniMax-H3`、5s、768P、16:9；H3 支持 `768P|2K` + 4–15s，H3-Max 支持 `480P|768P` + 5–15s，ratio 枚举 `21:9|16:9|4:3|1:1|3:4|9:16`（t2v 不接受 `adaptive`）。实测 H3 5s/768P/16:9 约 118s 出片，成片自带音轨；`--timeout` 默认 900000ms，轮询间隔 `--poll-interval` 默认 5000ms。超时报 `E_PROVIDER_ERROR` 并保留 `details.taskId`——任务可能仍在 provider 侧运行。
+`minimax-video`：文生视频 / 图生视频 / 多模态参考生视频三合一（H3、H3-Max），靠 `content[]` 的 `role` 区分场景。默认 `MiniMax-H3`、5s、768P；H3 支持 `768P|2K` + 4–15s，H3-Max 支持 `480P|768P` + 5–15s。**实测 H3 5s/768P 约 118s 出片，H3-Max 同档只要约 10s**，成片自带音轨；`--timeout` 默认 900000ms，轮询间隔 `--poll-interval` 默认 5000ms。超时报 `E_PROVIDER_ERROR` 并保留 `details.taskId`——任务可能仍在 provider 侧运行（`DELETE /v2/video_generation/{task_id}` 可删）。
+
+- **图生视频**：`--first-frame`（1 张）、`--last-frame`（须与首帧成对）、两者同给即首尾帧。`--ratio` 在此场景**恒为 `adaptive`**（宽高比由输入图片决定，官方明写传具体比例会被忽略；插件会钉成 adaptive 并附 `E_RATIO_IGNORED` 警告）。
+- **多模态参考**：`--ref-image`（≤9）、`--ref-video`（≤3）、`--ref-audio`（≤3），可在 prompt 里用 `<Picture 1>` / `<Video 1>` / `<Audio 1>` 按出现顺序指代；与帧模式**互斥**。此场景 `--ratio` 可选，默认 `adaptive`。
+- 媒体可给本地文件（读成 `data:<mime>;base64,` 内联，**不用先上 CDN**）、公网 http(s) 或 `mm_file://{file_id}`。图片格式 jpeg/png/webp/heic/heif、每边 [256,5760]、宽高比 [0.4,2.5]、≤30MB；视频 mp4/mov ≤50MB；音频 wav/mp3 ≤15MB；请求体总大小 ≤64MB（超了本地拒并提示改用 URL）。
+- `--aigc-watermark` 给成片加 AIGC 标识（默认关）；`--prompt-expansion disabled|balanced|quality` **仅 H3-Max 支持**（H3 传 `extra` 会被 provider 直接拒）。
+
+三条服务端**不校验、必须本地拦**的坑（都是实测撞出来的）：图片边长/宽高比要等任务跑起来才报（1×1 的图提交返回 `HTTP 200 + task_id`，随后才 failed）、只给 `last_frame` 不给 `first_frame` 会直接建任务、未知顶层字段一律静默忽略。`data.refs` 同类的 `data.media` 只回字节摘要，base64 绝不进 stdout。
+
+`minimax-video-regen`：把 MiniMax-H3 产出的 **768P 成片升 2K**（`POST /v2/video_regeneration`，与生成共用 `GET /v2/query/video_generation/{id}` 查询）。两种入参**二选一**：`--source-task-id <id>`（传平台已有的 768P 成功任务 ID，服务端自动回填 prompt/素材，须当前账号、7 天内、`succeeded`、`resolution=768P`；此模式**不要**再传 `--prompt`）或 `--base-video <pathOrUrl> --prompt <text>`（`content` 里恰好一个 `role=base_video` 的 `video_url`，本地 mp4/mov 直接内联、也可 http(s)/`mm_file://`）。`resolution` 固定 `2K`（provider 当前仅此一档），`ratio`/`duration` 跟随源视频、不传。**这不是通用超分**：源视频必须是 H3 的 768P 成片，外部视频会被拒。默认 `--timeout 900000`、`--poll-interval 5000`，超时报 `E_PROVIDER_ERROR` 且保留 `details.taskId`；`data.method` 回显用了哪种入参，本地文件的 `data.baseVideo` 只回字节摘要。
 
 错误判定不只看 HTTP 状态：音频侧还要看 `base_resp.status_code`（1008 余额不足、1002/1039 限流、2013 参数异常），视频侧看 `task.status` 与 `task.error`；所有错误细节放 `details`，任何输出都不含 key。
 

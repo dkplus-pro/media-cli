@@ -1,7 +1,7 @@
 import { readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { generateImage } from "./lib/client.mjs";
-import { loadConfig } from "./lib/env.mjs";
+import { loadConfig, MODERATIONS } from "./lib/env.mjs";
 import { cliError } from "./lib/errors.mjs";
 
 const SIZE_RE = /^\d{3,4}x\d{3,4}$/;
@@ -54,8 +54,21 @@ async function imageGen(ctx, args) {
       value: quality,
     });
   }
+  const moderation = args.moderation ?? config.moderation;
+  if (!MODERATIONS.includes(moderation)) {
+    throw cliError("E_INVALID_OPTION", `--moderation 仅支持 ${MODERATIONS.join("|")}`, {
+      option: "--moderation",
+      value: moderation,
+    });
+  }
 
-  const result = await generateImage(config, { prompt: args.prompt, size, quality, refs });
+  const result = await generateImage(config, {
+    prompt: args.prompt,
+    size,
+    quality,
+    moderation,
+    refs,
+  });
 
   const ext = config.outputFormat;
   const output = path.resolve(
@@ -78,6 +91,7 @@ async function imageGen(ctx, args) {
     bytes: buf.length,
     format: config.outputFormat,
     size,
+    moderation,
     ...(result.revisedPrompt !== undefined ? { revisedPrompt: result.revisedPrompt } : {}),
     account: result.account,
   };
@@ -104,6 +118,11 @@ export default {
         {
           flags: "--quality <q>",
           description: "auto|low|medium|high（默认取 AZURE_IMAGE_QUALITY）",
+        },
+        {
+          flags: "--moderation <m>",
+          description:
+            "auto|low（默认 low；只放宽模型侧额外过滤，Azure 内容安全层仍会拦并报 ResponsibleAIPolicyViolation）",
         },
       ],
       handler: imageGen,

@@ -1,6 +1,7 @@
 import { runMusic } from "./lib/music.mjs";
 import { runSpeech } from "./lib/speech.mjs";
 import { runVideo } from "./lib/video.mjs";
+import { runVideoRegen } from "./lib/video-regen.mjs";
 
 export default {
   name: "minimax",
@@ -67,9 +68,40 @@ export default {
     {
       name: "minimax-video",
       description:
-        "MiniMax 文生视频（v2 接口；H3 5s/768P/16:9 实测约 118s，成片自带音轨，阻塞轮询后下载）",
+        "MiniMax 文生/图生/多模态参考生视频（v2 接口；H3 5s/768P 实测约 118s、H3-Max 同档约 10s，成片自带音轨，阻塞轮询后下载）",
       options: [
-        { flags: "--prompt <text>", description: "视频描述（必填）" },
+        { flags: "--prompt <text>", description: "视频描述（必填，≤7000 字符）" },
+        {
+          flags: "--first-frame <pathOrUrl>",
+          description:
+            "首帧图（图生视频）：本地文件读成 data URI 内联（jpeg/png/webp/heic/heif、每边 [256,5760]、宽高比 [0.4,2.5]、≤30MB），也可给 http(s) 或 mm_file:// URL；此模式下 ratio 恒为 adaptive",
+        },
+        {
+          flags: "--last-frame <pathOrUrl>",
+          description: "尾帧图（必须与 --first-frame 成对；provider 提交期不校验，插件本地拦）",
+        },
+        {
+          flags: "--ref-image <pathsOrUrls...>",
+          description: "参考图（多模态参考生视频，≤9 张；与 --first-frame/--last-frame 互斥）",
+        },
+        {
+          flags: "--ref-video <pathsOrUrls...>",
+          description:
+            "参考视频（≤3 段、单段 [2,15]s、总 ≤15s、mp4/mov、≤50MB；时长/帧率未本地校验）",
+        },
+        {
+          flags: "--ref-audio <pathsOrUrls...>",
+          description: "参考音频（≤3 段、单段 [2,15]s、wav/mp3、≤15MB；可单独用不配参考图）",
+        },
+        {
+          flags: "--aigc-watermark",
+          description: "给成片加 AIGC 标识水印（默认关，与 provider 默认一致）",
+        },
+        {
+          flags: "--prompt-expansion <mode>",
+          description:
+            "提示词扩写档位 disabled|balanced|quality，**仅 MiniMax-H3-Max 支持**（H3 传 extra 会被 provider 拒）",
+        },
         {
           flags: "--model <id>",
           description: "MiniMax-H3（默认）| MiniMax-H3-Max，可由 MINIMAX_VIDEO_MODEL 覆盖",
@@ -78,7 +110,8 @@ export default {
         { flags: "--resolution <r>", description: "H3：768P|2K，H3-Max：480P|768P（默认 768P）" },
         {
           flags: "--ratio <r>",
-          description: "21:9|16:9|4:3|1:1|3:4|9:16（默认 16:9；t2v 不支持 adaptive）",
+          description:
+            "21:9|16:9|4:3|1:1|3:4|9:16|adaptive（纯文生视频必填具体比例、默认 16:9；带图时恒为 adaptive，参考模式默认 adaptive）",
         },
         { flags: "--poll-interval <ms>", description: "轮询间隔（默认 5000）" },
         { flags: "--timeout <ms>", description: "提交+轮询+下载总预算（默认 900000）" },
@@ -88,6 +121,44 @@ export default {
         },
       ],
       handler: runVideo,
+    },
+    {
+      name: "minimax-video-regen",
+      description:
+        "MiniMax H3 视频再生为 2K（POST /v2/video_regeneration：把 H3 的 768P 成片升 2K；--source-task-id 或 --base-video 二选一，resolution 固定 2K，阻塞轮询后下载）",
+      options: [
+        {
+          flags: "--source-task-id <id>",
+          description:
+            "按 768P 任务 ID 再生（与 --base-video 二选一）：须为当前账号 7 天内、status=succeeded 的 H3 768P 任务，服务端自动回填 prompt/素材",
+        },
+        {
+          flags: "--base-video <pathOrUrl>",
+          description:
+            "按 768P 源视频再生（与 --source-task-id 二选一，须配 --prompt）：本地 mp4/mov 读成 data URI 内联，也可 http(s) 或 mm_file://；源视频须是 H3 的 768P 成片，不支持任意视频超分",
+        },
+        {
+          flags: "--prompt <text>",
+          description:
+            "再生文本（--base-video 模式必填、≤7000 字符；--source-task-id 模式不要传，服务端自动回填）",
+        },
+        {
+          flags: "--aigc-watermark",
+          description: "给 2K 成片加 AIGC 标识水印（默认关，与 provider 默认一致）",
+        },
+        {
+          flags: "--model <id>",
+          description:
+            "默认 MiniMax-H3，可由 MINIMAX_VIDEO_REGEN_MODEL 覆盖（部分网关的再生模型名为 MiniMax-H3-Regeneration）",
+        },
+        { flags: "--poll-interval <ms>", description: "轮询间隔（默认 5000）" },
+        { flags: "--timeout <ms>", description: "提交+轮询+下载总预算（默认 900000）" },
+        {
+          flags: "--output <path>",
+          description: "输出 mp4 路径（默认 ./minimax-video-regen-<时间戳>.mp4）",
+        },
+      ],
+      handler: runVideoRegen,
     },
   ],
 };

@@ -2,6 +2,10 @@ import { cliError } from "./errors.mjs";
 
 const OUTPUT_FORMATS = ["png", "jpeg", "webp"];
 const QUALITIES = ["auto", "low", "medium", "high"];
+// 实测 2026-10-19：generations 与 edits 两个端点都收 moderation，非法值回
+// 400 "Invalid value: 'bogus'. Supported values are: 'auto' and 'low'."
+// 注意 2025-04-01-preview 的官方参考页并未列出该字段（文档滞后于服务）。
+export const MODERATIONS = ["auto", "low"];
 
 function parsePool(raw, name) {
   if (typeof raw !== "string" || raw.trim() === "") {
@@ -46,7 +50,7 @@ export function loadConfig(env = process.env) {
     return { endpoint: endpoint.replace(/\/+$/, ""), key: keys[index] };
   });
 
-  const outputFormat = env.AZURE_IMAGE_OUTPUT_FORMAT ?? "png";
+  const outputFormat = env.AZURE_IMAGE_OUTPUT_FORMAT ?? "jpeg";
   if (!OUTPUT_FORMATS.includes(outputFormat)) {
     throw cliError("E_CONFIG", `AZURE_IMAGE_OUTPUT_FORMAT 仅支持 ${OUTPUT_FORMATS.join("|")}`, {
       var: "AZURE_IMAGE_OUTPUT_FORMAT",
@@ -60,12 +64,20 @@ export function loadConfig(env = process.env) {
       value: quality,
     });
   }
+  const moderation = env.AZURE_IMAGE_MODERATION ?? "low";
+  if (!MODERATIONS.includes(moderation)) {
+    throw cliError("E_CONFIG", `AZURE_IMAGE_MODERATION 仅支持 ${MODERATIONS.join("|")}`, {
+      var: "AZURE_IMAGE_MODERATION",
+      value: moderation,
+    });
+  }
 
   return {
     accounts,
     deployment: env.AZURE_IMAGE_DEPLOYMENT ?? "gpt-image-2",
     outputFormat,
     quality,
+    moderation,
     apiVersion: env.AZURE_IMAGE_API_VERSION ?? "2025-04-01-preview",
   };
 }

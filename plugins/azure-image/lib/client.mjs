@@ -18,7 +18,7 @@ function buildUrl(account, config, hasRefs) {
   return `${account.endpoint}/openai/deployments/${deployment}/${action}?api-version=${apiVersion}`;
 }
 
-function buildRequest(config, { prompt, size, quality, refs }) {
+function buildRequest(config, { prompt, size, quality, moderation, refs }) {
   if (refs.length > 0) {
     const form = new FormData();
     for (const ref of refs) {
@@ -27,6 +27,7 @@ function buildRequest(config, { prompt, size, quality, refs }) {
     form.append("prompt", prompt);
     form.append("size", size);
     form.append("quality", quality);
+    form.append("moderation", moderation);
     form.append("output_format", config.outputFormat);
     // content-type 由 fetch 自动生成（含 boundary），不得手工设置
     return { method: "POST", body: form };
@@ -38,13 +39,14 @@ function buildRequest(config, { prompt, size, quality, refs }) {
       prompt,
       size,
       quality,
+      moderation,
       output_format: config.outputFormat,
       n: 1,
     }),
   };
 }
 
-export async function generateImage(config, { prompt, size, quality, refs }) {
+export async function generateImage(config, { prompt, size, quality, moderation, refs }) {
   const keys = config.accounts.map((a) => a.key);
   const total = config.accounts.length;
   const start = Math.floor(Math.random() * total);
@@ -54,7 +56,7 @@ export async function generateImage(config, { prompt, size, quality, refs }) {
     const index = (start + i) % total;
     const account = config.accounts[index];
     const url = buildUrl(account, config, refs.length > 0);
-    const init = buildRequest(config, { prompt, size, quality, refs });
+    const init = buildRequest(config, { prompt, size, quality, moderation, refs });
 
     let res;
     try {
