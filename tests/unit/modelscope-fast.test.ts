@@ -219,12 +219,13 @@ describe("modelscope manifest（AGENTS.md §5 声明式契约）", () => {
       (o: { flags: string }) => o.flags,
     );
 
-  it("三个命令齐备，gen 与 fast 的选项集仍完全一致（§4.2：只差默认值）", () => {
+  it("四个命令齐备，gen 与 fast 的选项集仍完全一致（§4.2：只差默认值）", () => {
     expect(manifest.name).toBe("modelscope-image");
     expect(manifest.commands.map((c: { name: string }) => c.name)).toEqual([
       "modelscope-image-gen",
       "modelscope-image-fast",
       "modelscope-image-edit",
+      "modelscope-image-h3",
     ]);
     expect(flagsOf("modelscope-image-gen")).toEqual(flagsOf("modelscope-image-fast"));
     for (const cmd of manifest.commands) {
@@ -238,7 +239,10 @@ describe("modelscope manifest（AGENTS.md §5 声明式契约）", () => {
   });
 
   it("选项文本不再写 1.5，且如实标出 prompt 上限", () => {
-    for (const cmd of manifest.commands) {
+    // H3 是独立契约（无 steps/guidance、prompt 上限 32000），单独断言
+    for (const cmd of manifest.commands.filter(
+      (c: { name: string }) => c.name !== "modelscope-image-h3",
+    )) {
       const text = (cmd.options ?? [])
         .map((o: { description: string }) => o.description)
         .join("\n");
@@ -246,6 +250,12 @@ describe("modelscope manifest（AGENTS.md §5 声明式契约）", () => {
       expect(text).toContain("1-20");
       expect(text).toContain("4000 字符");
     }
+    const h3 = manifest.commands.find((c: { name: string }) => c.name === "modelscope-image-h3");
+    const h3Text = (h3?.options ?? [])
+      .map((o: { description: string }) => o.description)
+      .join("\n");
+    expect(h3Text).not.toContain("1.5");
+    expect(h3Text).toContain("32000 字符");
     const fast = manifest.commands.find(
       (c: { name: string }) => c.name === "modelscope-image-fast",
     );

@@ -190,7 +190,7 @@ node dist/media-cli.js --json banana-image-gen --prompt "让模型自己选尺�
 
 `output_format` 同样会被**静默忽略**（2026-10-18 实测，单样本）：同一 prompt、`2880x2880`、请求 `jpeg`，`quality=low` 那次回的是 **PNG**（12.35MB），`quality=high` 那次才是 JPEG（2.25MB）；两次都 HTTP 200、`size` 照实回、没有任何警告。唯一可信的判据是 `data.format`（sharp 解出的真格式）与 `data.bytes`。体积口径也一并实测过：2880² 同图 PNG 是 JPEG 的 **6–9 倍**（12–15MB vs 1.3–2.4MB），`quality` 档对体积基本不参与换算。
 
-### modelscope-image（ModelScope API-Inference 生图/改图，Qwen-Image 系列：gen / fast / edit 三条命令）
+### modelscope-image（ModelScope API-Inference 生图/改图，Qwen-Image 系列 + MiniMax-H3-Image：gen / fast / edit / h3 四条命令）
 
 ```bash
 # ~/.zshrc
@@ -200,6 +200,7 @@ export MODELSCOPE_KEY_POOL="ms-aaaa,ms-bbbb"                       # 可选：�
 export MODELSCOPE_IMAGE_MODEL="Qwen/Qwen-Image-2.1"                # 默认模型名，--model 可覆盖
 export MODELSCOPE_FAST_MODEL="Qwen/Qwen-Image-2.1-Turbo"           # 可选：modelscope-image-fast 的默认模型（不配也用这个内置值）
 export MODELSCOPE_EDIT_MODEL="Qwen/Qwen-Image-Edit"                # 可选：modelscope-image-edit 的默认模型（不配也用这个内置值）
+export MODELSCOPE_H3_MODEL="MiniMax/MiniMax-H3-Image"              # 可选：modelscope-image-h3 的默认模型（不配也用这个内置值）
 node dist/media-cli.js --json modelscope-image-gen --prompt "一只红苹果" --output apple.png
 node dist/media-cli.js --json modelscope-image-gen --prompt "江南水乡" --size 1328x1328 --steps 40 --guidance 3.5 --seed 12345
 node dist/media-cli.js --json modelscope-image-gen --prompt "赛博城市" --negative-prompt "模糊, 低画质"
@@ -222,6 +223,13 @@ node dist/media-cli.js --json modelscope-image-edit --prompt "把两张参考图
   --ref ./cloth.png https://cdn.example.com/tmp/plate.png --size 2048x2048 --output mix.png
 # 不传 --ref 也能提交：网关会退化成文生图（实测）
 node dist/media-cli.js --json modelscope-image-edit --prompt "一只红苹果" --output t2i.png
+
+# H3 档 modelscope-image-h3（MiniMax/MiniMax-H3-Image）：每边 ≤2048，图生图沿用 image_url
+node dist/media-cli.js --json modelscope-image-h3 --prompt "一只红苹果" --output apple.png
+node dist/media-cli.js --json modelscope-image-h3 --prompt "保持构图，把材质换成磨砂金属" --ref ./a.png --output h3-edit.png
+
+# 2026-11-12 实测：网关对 MiniMax/MiniMax-H3-Image 稳定回 HTTP 400 submit failed with code: 40000
+# （模型页 SupportApiInference=false）；4096x4096 在网关每边 2048 上限下本地即拒，4K 请用 minimax-image
 ```
 
 | 环境变量 | 默认 | 说明 |
@@ -231,6 +239,7 @@ node dist/media-cli.js --json modelscope-image-edit --prompt "一只红苹果" -
 | `MODELSCOPE_IMAGE_MODEL` | 必填（或每次传 `--model`） | 模型 id，如 `Qwen/Qwen-Image-2.1`；**只有 `modelscope-image-gen` 吃它**（fast 与 edit 各有自己的内置默认），可调用清单见 [AIGC 专区模型库](https://www.modelscope.cn/aigc/models) |
 | `MODELSCOPE_FAST_MODEL` | `Qwen/Qwen-Image-2.1-Turbo` | **`modelscope-image-fast` 专用**，有内置默认值（不配也能跑），`--model` 可覆盖；其余 key/池/域名/超时变量与 `modelscope-image-gen` 完全共用 |
 | `MODELSCOPE_EDIT_MODEL` | `Qwen/Qwen-Image-Edit` | **`modelscope-image-edit` 专用**，同样有内置默认值（实测网关可直接调，不配也能跑），`--model` 可覆盖；三个模型变量互不串门，其余变量与兄弟命令共用 |
+| `MODELSCOPE_H3_MODEL` | `MiniMax/MiniMax-H3-Image` | **`modelscope-image-h3` 专用**，有内置默认值（不配也能跑），`--model` 可覆盖；网关当前对模型回 40000，且每边上限 2048 |
 | `MODELSCOPE_BASE_URL` | `https://api-inference.modelscope.cn` | 网关根地址（不含 `/v1`，误填 `/v1` 会被自动剥掉） |
 | `MODELSCOPE_TIMEOUT_MS` | `300000` | 单次 HTTP 与整体轮询的超时上限 |
 | `MODELSCOPE_POLL_INTERVAL_MS` | `2000` | 异步任务轮询间隔 |
@@ -315,7 +324,7 @@ node dist/media-cli.js --json agnes-video --prompt "先占个额度" --no-wait  
 
 > ⚠️ **`agnes-video` 的出片行为待实测。** 已实测的是**提交与校验侧**：三种 `--mode`（`text`/`keyframe`/`reference`）的本地校验全部生效，`seconds` 在 provider 侧是 **JSON 字符串**（插件已自动转换，取值 4–12，默认 5），`size` **只接受 `720P`**（其他值本地即拒，provider 直接 400），`images` ≤5、`audios` ≤3，且素材**只收公网 URL**（本地路径报 `E_INVALID_OPTION` 并提示先跑 `tencent-cos-upload`）。**未实测**：一条真实视频都没生成成功过——探测期间视频通道对连续 18 次间隔提交（跨 22 分钟）全部返回 503 `video_queue_full`，更早一个窗口连续 66 分钟同样，而同一把 key 约 94s 后图片通道仍是 HTTP 200（所以是通道容量，不是账号或额度）。因此**视频的时长、`status` 生命周期、轮询路由一律按未知处理**：两条候选轮询路由只用假 id 探过（`/agnesapi?video_id=` → 404 `task not found`，`/v1/videos/{id}` → 400 `task_not_exist`；`/v1/tasks/{id}` 不存在）。另外实测到约 20s 内连发 3 次提交会撞免费档 429、约 3.5 分钟自愈，**批量提交请把间隔拉到 ≥75s**。prompt 长度上限同样待实测，所以未做本地预检。
 
-### minimax（MiniMax 语音合成 / 音乐生成 / 文生视频 / 视频再生 2K）
+### minimax（MiniMax 语音合成 / 音乐生成 / 文生视频 / 视频再生 2K / H3 生图）
 
 ```bash
 # ~/.zshrc
@@ -330,6 +339,9 @@ node dist/media-cli.js --json minimax-video --prompt "让她转头微笑，微�
 node dist/media-cli.js --json minimax-video --prompt "<Picture 1> 按 <Video 1> 的舞步" --ref-image c.png --ref-video https://cdn/m.mp4   # 多模态参考
 node dist/media-cli.js --json minimax-video-regen --source-task-id 424010985738629                                          # 把已有 768P 任务升 2K
 node dist/media-cli.js --json minimax-video-regen --base-video h3-768p.mp4 --prompt "升到 2K"                               # 按源视频再生（本地文件直接内联）
+node dist/media-cli.js --json minimax-image --prompt "一只红苹果" --size 1024x1024 --output apple.jpeg
+node dist/media-cli.js --json minimax-image --prompt "改成青苹果，保持桌面与光照" --ref apple.jpeg --output green.jpeg       # 图生图/编辑（本地文件直接内联）
+node dist/media-cli.js --json minimax-image --prompt "全景山景" --area 4K --aspect-ratio 16:9 --output pano.jpeg              # 4K 档
 ```
 
 | 环境变量 | 默认 | 说明 |
@@ -340,6 +352,7 @@ node dist/media-cli.js --json minimax-video-regen --base-video h3-768p.mp4 --pro
 | `MINIMAX_MUSIC_MODEL` | `music-3.0` | `minimax-music` 型号，`--model` 优先 |
 | `MINIMAX_VIDEO_MODEL` | `MiniMax-H3` | `minimax-video` 型号；仅支持 `MiniMax-H3` / `MiniMax-H3-Max`，`--model` 优先 |
 | `MINIMAX_VIDEO_REGEN_MODEL` | `MiniMax-H3` | `minimax-video-regen` 型号；官方为 `MiniMax-H3`，部分网关为 `MiniMax-H3-Regeneration`，`--model` 优先 |
+| `MINIMAX_IMAGE_MODEL` | `MiniMax-H3-Image` | `minimax-image` 型号；也可用 `MiniMax-H3-Image-Highspeed`，`--model` 优先 |
 
 三条命令的产物都是**同步落盘**：语音/音乐返回 hex 音频（也兼容 URL 下载），视频是提交 + 轮询 + 下载。
 
@@ -357,6 +370,8 @@ node dist/media-cli.js --json minimax-video-regen --base-video h3-768p.mp4 --pro
 三条服务端**不校验、必须本地拦**的坑（都是实测撞出来的）：图片边长/宽高比要等任务跑起来才报（1×1 的图提交返回 `HTTP 200 + task_id`，随后才 failed）、只给 `last_frame` 不给 `first_frame` 会直接建任务、未知顶层字段一律静默忽略。`data.refs` 同类的 `data.media` 只回字节摘要，base64 绝不进 stdout。
 
 `minimax-video-regen`：把 MiniMax-H3 产出的 **768P 成片升 2K**（`POST /v2/video_regeneration`，与生成共用 `GET /v2/query/video_generation/{id}` 查询）。两种入参**二选一**：`--source-task-id <id>`（传平台已有的 768P 成功任务 ID，服务端自动回填 prompt/素材，须当前账号、7 天内、`succeeded`、`resolution=768P`；此模式**不要**再传 `--prompt`）或 `--base-video <pathOrUrl> --prompt <text>`（`content` 里恰好一个 `role=base_video` 的 `video_url`，本地 mp4/mov 直接内联、也可 http(s)/`mm_file://`）。`resolution` 固定 `2K`（provider 当前仅此一档），`ratio`/`duration` 跟随源视频、不传。**这不是通用超分**：源视频必须是 H3 的 768P 成片，外部视频会被拒。默认 `--timeout 900000`、`--poll-interval 5000`，超时报 `E_PROVIDER_ERROR` 且保留 `details.taskId`；`data.method` 回显用了哪种入参，本地文件的 `data.baseVideo` 只回字节摘要。
+
+`minimax-image`：H3 生图（文生图 + 图生图/图片编辑，同步接口）。不带 `--ref` 走 `POST /v1/images/generations`；带 `--ref`（1–16 张，本地文件直接内联、也可 http(s)/`mm_file://`）走 `POST /v1/images/edits`。`--size` 默认 `1024x1024`（provider 默认是 `auto`/4K；显式 WxH 面积为 655,360–20,000,000 px、比例 1:3–3:1），也可用 `--area 1K|2K|4K` + `--aspect-ratio`（仅 `--size auto/省略` 时可用）。默认 `--output-format jpeg`、`--timeout 600000`。实测 2026-11-12：**1024=8.9s、2048=8.5s、4096=13.1s**（落盘 0.37/0.99/4.2MB），图生图 **10.0s**。**HTTP 200 也要逐项检查 `data[].error`**（失败项如内容安全 1026/1027 也可能伴随 200），结果 URL 24h 过期，命令拿到即下载。
 
 错误判定不只看 HTTP 状态：音频侧还要看 `base_resp.status_code`（1008 余额不足、1002/1039 限流、2013 参数异常），视频侧看 `task.status` 与 `task.error`；所有错误细节放 `details`，任何输出都不含 key。
 

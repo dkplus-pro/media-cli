@@ -63,8 +63,10 @@ describe("media-cutout 错误分支（无需 macOS 集成环境）", () => {
   });
 
   it("输入不存在 → E_MISSING_ARGUMENT", async () => {
+    // 插件先解析引擎再探测输入：Linux 没有自带 vision-cutout，需要一个可执行 stub
+    // 才能走到输入校验（本用例不会真正执行该二进制）
     const r = await cli(["--json", "media-cutout", "--input", "/nonexistent.png"], {
-      CUTOUT_BIN: undefined,
+      CUTOUT_BIN: process.execPath,
     });
     expect(r.code).toBe(2);
     expect((JSON.parse(r.stdout) as CliEnveloped).error?.code).toBe("E_MISSING_ARGUMENT");

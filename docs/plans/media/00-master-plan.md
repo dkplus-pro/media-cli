@@ -160,6 +160,7 @@ data：`{ "path": string, "bytes": number, "format": string, "size": string, "mo
 | minimax | `MINIMAX_MUSIC_MODEL` | 否 | `music-3.0` | `minimax-music` 型号；`--model` 优先 |
 | minimax | `MINIMAX_VIDEO_MODEL` | 否 | `MiniMax-H3` | `minimax-video` 型号；仅支持 H3/H3-Max；`--model` 优先 |
 | minimax | `MINIMAX_VIDEO_REGEN_MODEL` | 否 | `MiniMax-H3` | `minimax-video-regen` 型号；官方为 `MiniMax-H3`，部分网关为 `MiniMax-H3-Regeneration`；`--model` 优先 |
+| minimax | `MINIMAX_IMAGE_MODEL` | 否 | `MiniMax-H3-Image` | `minimax-image` 型号；也可用 `MiniMax-H3-Image-Highspeed`；`--model` 优先 |
 
 ## 5. 错误码增量（阶段 01 登记 `src/core/errors.ts`，同步壳 00-master-plan §4.4）
 

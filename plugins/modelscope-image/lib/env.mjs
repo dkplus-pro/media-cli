@@ -64,6 +64,8 @@ export function loadConfig(env = process.env) {
     fastModel: (env.MODELSCOPE_FAST_MODEL ?? "").trim(),
     // 同上：modelscope-image-edit 退回内置的 Qwen/Qwen-Image-Edit（实测网关可直接调）
     editModel: (env.MODELSCOPE_EDIT_MODEL ?? "").trim(),
+    // 同上：modelscope-image-h3 退回内置的 MiniMax/MiniMax-H3-Image
+    h3Model: (env.MODELSCOPE_H3_MODEL ?? "").trim(),
     timeoutMs: positiveInt(env.MODELSCOPE_TIMEOUT_MS, "MODELSCOPE_TIMEOUT_MS", 300000),
     pollIntervalMs: positiveInt(
       env.MODELSCOPE_POLL_INTERVAL_MS,

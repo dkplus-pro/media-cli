@@ -56,9 +56,21 @@ export const EDIT_DEFAULTS = {
   localRefs: true,
 };
 
+// MiniMax-H3-Image（modelscope-image-h3）：采样固定 6 steps / guidance 1、不吃 negative_prompt，
+// 因此没有 steps/guidance 字段；参考图上限 16 张（图片编辑）。
+// 原生 4K 不在本命令：网关每边硬限 2048（4096x4096 实测 400），4K 走 minimax-image
+export const H3_DEFAULTS = {
+  modelVar: "MODELSCOPE_H3_MODEL",
+  modelFallback: "MiniMax/MiniMax-H3-Image",
+  sizeDefault: "1024x1024",
+  filePrefix: "modelscope-h3-",
+  refMax: 16,
+};
+
 // defaults 存环境变量名，loadConfig 已把变量读成 camelCase 字段，这里做一次映射
 export const MODEL_CONFIG_FIELD = {
   MODELSCOPE_IMAGE_MODEL: "model",
   MODELSCOPE_FAST_MODEL: "fastModel",
   MODELSCOPE_EDIT_MODEL: "editModel",
+  MODELSCOPE_H3_MODEL: "h3Model",
 };

@@ -1,3 +1,4 @@
+import { runImage } from "./lib/image.mjs";
 import { runMusic } from "./lib/music.mjs";
 import { runSpeech } from "./lib/speech.mjs";
 import { runVideo } from "./lib/video.mjs";
@@ -159,6 +160,62 @@ export default {
         },
       ],
       handler: runVideoRegen,
+    },
+    {
+      name: "minimax-image",
+      description:
+        "MiniMax H3 文生图/图片编辑（MiniMax-H3-Image，同步出图；默认 1024x1024/jpeg；--ref 1–16 张走 /v1/images/edits）",
+      options: [
+        { flags: "--prompt <text>", description: "画面描述（必填，1–32000 字符）" },
+        {
+          flags: "--ref <pathsOrUrls...>",
+          description:
+            "参考图 1–16 张（本地文件读成 data URI，也收 http(s) 与 mm_file://；传了即走 /v1/images/edits 图生图/编辑）",
+        },
+        {
+          flags: "--size <WxH|auto>",
+          description:
+            "输出尺寸（默认 1024x1024；WxH 要求面积 655,360–20,000,000 px、比例 1:3–3:1；auto 时由 provider 定，provider 默认 4K）",
+        },
+        {
+          flags: "--aspect-ratio <X:Y|auto>",
+          description: "宽高比 X:Y 或 auto（仅 --size auto/省略时可用，与显式 WxH 互斥）",
+        },
+        {
+          flags: "--area <1K|2K|4K>",
+          description: "目标像素档 1K/2K/4K（provider 默认 4K；仅 --size auto/省略时可用）",
+        },
+        {
+          flags: "--disable-prompt-enhanced",
+          description: "关闭提示词增强（需显式比例：--size WxH 或 auto + --aspect-ratio X:Y）",
+        },
+        {
+          flags: "--output-format <png|jpeg|jpg|webp>",
+          description: "输出格式（默认 jpeg；jpg 归一为 jpeg）",
+        },
+        {
+          flags: "--output-compression <0-100>",
+          description: "输出压缩 0–100（整数，provider 默认 95；仅 jpeg/webp 有意义，png 忽略）",
+        },
+        {
+          flags: "--aigc-watermark",
+          description: "给成图加 AIGC 标识水印（默认关，与 provider 默认一致）",
+        },
+        {
+          flags: "--model <id>",
+          description:
+            "MiniMax-H3-Image（默认）| MiniMax-H3-Image-Highspeed，可由 MINIMAX_IMAGE_MODEL 覆盖",
+        },
+        {
+          flags: "--timeout <ms>",
+          description: "请求+下载超时（默认 600000；实测 1024² 约 8s、4096² 约 13s）",
+        },
+        {
+          flags: "--output <path>",
+          description: "输出图片路径（默认 ./minimax-image-<时间戳>.<output_format 扩展名>）",
+        },
+      ],
+      handler: runImage,
     },
   ],
 };

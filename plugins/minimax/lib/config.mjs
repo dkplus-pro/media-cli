@@ -6,6 +6,7 @@ export const DEFAULT_SPEECH_MODEL = "speech-2.8-hd";
 export const DEFAULT_MUSIC_MODEL = "music-3.0";
 export const DEFAULT_VIDEO_MODEL = "MiniMax-H3";
 export const DEFAULT_VIDEO_REGEN_MODEL = "MiniMax-H3";
+export const DEFAULT_IMAGE_MODEL = "MiniMax-H3-Image";
 
 function trimmed(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -51,6 +52,7 @@ export function loadConfig(env = process.env) {
     musicModel: trimmed(env.MINIMAX_MUSIC_MODEL) || DEFAULT_MUSIC_MODEL,
     videoModel: trimmed(env.MINIMAX_VIDEO_MODEL) || DEFAULT_VIDEO_MODEL,
     videoRegenModel: trimmed(env.MINIMAX_VIDEO_REGEN_MODEL) || DEFAULT_VIDEO_REGEN_MODEL,
+    imageModel: trimmed(env.MINIMAX_IMAGE_MODEL) || DEFAULT_IMAGE_MODEL,
   };
 }
 

@@ -267,7 +267,7 @@ describe("minimax-music e2e", () => {
     await mock.close();
   });
 
-  it("spec 列出 minimax 四命令与语音/音乐选项", async () => {
+  it("spec 列出 minimax 五命令与语音/音乐选项", async () => {
     const run = await cli(["--json", "spec"]);
     expect(run.code).toBe(0);
     const spec = parseData<{
@@ -279,6 +279,7 @@ describe("minimax-music e2e", () => {
       "minimax-music",
       "minimax-video",
       "minimax-video-regen",
+      "minimax-image",
     ]);
     expect(minimax.every((item) => item.source === "plugin:minimax")).toBe(true);
 

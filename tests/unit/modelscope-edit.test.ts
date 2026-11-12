@@ -355,11 +355,12 @@ describe("modelscope-image manifest：第三条命令（AGENTS.md §5 声明式�
       .map((o: { description: string }) => o.description)
       .join("\n");
 
-  it("三个命令齐备，gen 与 fast 的选项集仍完全一致", () => {
+  it("四个命令齐备，gen 与 fast 的选项集仍完全一致", () => {
     expect(manifest.commands.map((c: { name: string }) => c.name)).toEqual([
       "modelscope-image-gen",
       "modelscope-image-fast",
       "modelscope-image-edit",
+      "modelscope-image-h3",
     ]);
     expect(flagsOf("modelscope-image-gen")).toEqual(flagsOf("modelscope-image-fast"));
   });
@@ -395,8 +396,10 @@ describe("modelscope-image manifest：第三条命令（AGENTS.md §5 声明式�
     expect(text).not.toContain("1.5");
   });
 
-  it("三条命令的选项文本都不再宣称 steps 能到 100", () => {
-    for (const cmd of manifest.commands) {
+  it("三条 Qwen 命令的选项文本都不再宣称 steps 能到 100", () => {
+    for (const cmd of manifest.commands.filter(
+      (c: { name: string }) => c.name !== "modelscope-image-h3",
+    )) {
       const text = textOf(cmd.name);
       expect(text).not.toContain("1-100");
       expect(text).toContain("1-50");

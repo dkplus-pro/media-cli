@@ -1,9 +1,12 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { cli } from "./helpers/cli.ts";
 import { msEnv, parseError, startMock } from "./helpers/modelscope-mock.ts";
+
+// 全量并发时 spawn 真进程会超过 vitest 默认 5s（同兄弟 e2e 文件）
+vi.setConfig({ testTimeout: 30_000 });
 
 describe("modelscope-image 失败语义（本地 mock）", () => {
   let dir: string;
